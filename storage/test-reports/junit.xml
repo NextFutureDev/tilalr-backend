@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="C:\xampp\htdocs\tilrimal-backend\phpunit.xml" tests="1" assertions="10" errors="0" failures="0" skipped="0" time="1.396782">
+    <testsuite name="Feature" tests="1" assertions="10" errors="0" failures="0" skipped="0" time="1.396782">
+      <testsuite name="Tests\Feature\BookingPaymentTest" file="C:\xampp\htdocs\tilrimal-backend\tests\Feature\BookingPaymentTest.php" tests="1" assertions="10" errors="0" failures="0" skipped="0" time="1.396782">
+        <testcase name="test_create_booking_and_pay_success" file="C:\xampp\htdocs\tilrimal-backend\tests\Feature\BookingPaymentTest.php" line="13" class="Tests\Feature\BookingPaymentTest" classname="Tests.Feature.BookingPaymentTest" assertions="10" time="1.396782"/>
+      </testsuite>
+    </testsuite>
+  </testsuite>
+</testsuites>
