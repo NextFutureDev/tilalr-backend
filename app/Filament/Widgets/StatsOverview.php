@@ -2,9 +2,12 @@
 
 namespace App\Filament\Widgets;
 
-use App\Models\ContactMessage;
-use App\Models\TeamMember;
-use App\Models\Project;
+use App\Models\User;
+use App\Models\Trip;
+use App\Models\Offer;
+use App\Models\IslandDestination;
+use App\Models\InternationalDestination;
+use App\Models\Reservation;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -13,23 +16,41 @@ class StatsOverview extends BaseWidget
     protected function getStats(): array
     {
         return [
-            Stat::make('Contact Messages', ContactMessage::count())
-                ->description('Total messages received')
-                ->descriptionIcon('heroicon-m-envelope')
-                ->color('success')
-                ->chart([7, 2, 10, 3, 15, 4, 17]),
-
-            Stat::make('Team Members', TeamMember::count())
-                ->description('Active team members')
+            Stat::make('Total Users', User::count())
+                ->description('Registered users')
                 ->descriptionIcon('heroicon-m-users')
-                ->color('info')
-                ->chart([17, 16, 14, 15, 14, 13, 12]),
+                ->color('success')
+                ->chart([3, 4, 5, 5, 6, 6, 6]),
 
-            Stat::make('Projects', Project::count())
-                ->description('Total projects added to the website')
-                ->descriptionIcon('heroicon-m-folder')
+            Stat::make('Trips', Trip::count())
+                ->description('Active trips available')
+                ->descriptionIcon('heroicon-m-map')
+                ->color('info')
+                ->chart([2, 3, 4, 5, 5, 6, 6]),
+
+            Stat::make('Offers', Offer::count())
+                ->description('Special offers')
+                ->descriptionIcon('heroicon-m-gift')
+                ->color('warning')
+                ->chart([1, 2, 2, 3, 3, 3, 3]),
+
+            Stat::make('Island Destinations', IslandDestination::count())
+                ->description('Local island destinations')
+                ->descriptionIcon('heroicon-m-sun')
                 ->color('primary')
-                ->chart([15, 4, 13, 2, 12, 4, 16]),
+                ->chart([2, 3, 4, 5, 5, 6, 6]),
+
+            Stat::make('International Destinations', InternationalDestination::count())
+                ->description('International travel packages')
+                ->descriptionIcon('heroicon-m-globe-alt')
+                ->color('danger')
+                ->chart([2, 3, 4, 5, 5, 6, 6]),
+
+            Stat::make('Reservations', Reservation::count())
+                ->description('Total bookings')
+                ->descriptionIcon('heroicon-m-calendar')
+                ->color('gray')
+                ->chart([0, 0, 0, 0, 0, 0, 0]),
         ];
     }
 }

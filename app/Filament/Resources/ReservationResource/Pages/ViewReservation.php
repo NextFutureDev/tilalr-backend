@@ -66,20 +66,8 @@ class ViewReservation extends ViewRecord
                         Components\TextEntry::make('notes')
                             ->label('Customer Notes')
                             ->columnSpanFull(),
-                        Components\KeyValueEntry::make('details')
+                        Components\TextEntry::make('details_display')
                             ->label('Additional Details')
-                            ->formatStateUsing(function ($state) {
-                                // Safely stringify nested arrays/objects before rendering to avoid htmlspecialchars errors
-                                if (!is_array($state)) {
-                                    return (string) $state;
-                                }
-                                return array_map(function ($v) {
-                                    if (is_array($v) || is_object($v)) {
-                                        return json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                                    }
-                                    return (string) $v;
-                                }, $state);
-                            })
                             ->columnSpanFull(),
                     ]),
 

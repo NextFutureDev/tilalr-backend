@@ -3,49 +3,46 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\IslandDestinationResource\Pages;
+use App\Filament\Resources\Concerns\HasResourcePermissions;
 use App\Models\IslandDestination;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class IslandDestinationResource extends Resource
 {
+    use HasResourcePermissions;
+
     protected static ?string $model = IslandDestination::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-map';
+    protected static ?string $navigationIcon = 'heroicon-o-map-pin';
     
-    protected static ?string $navigationLabel = 'Island Destinations';
+    protected static ?string $navigationLabel = 'Local Islands';
     
-    protected static ?string $modelLabel = 'Island Destination';
+    protected static ?string $modelLabel = 'Local Island Destination';
     
-    protected static ?string $navigationGroup = 'Destinations';
+    protected static ?string $navigationGroup = 'Local Destinations';
 
-    // Executive Manager, Consultant, and Super Admin can access
-    public static function canAccess(): bool
+    protected static ?int $navigationSort = 1;
+
+    public static function getPermissionKey(): string
     {
-        $user = auth()->user();
-        return $user && ($user->hasRole('executive_manager') || $user->hasRole('consultant') || $user->hasRole('super_admin'));
+        return 'island_destinations';
+    }
+
+    // Filter query to only show local islands
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->where('type', 'local');
     }
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Forms\Components\Section::make('Destination Type')
-                    ->schema([
-                        Forms\Components\Select::make('type')
-                            ->required()
-                            ->options([
-                                'local' => 'Local (Saudi Arabia)',
-                                'international' => 'International',
-                            ])
-                            ->label('Destination Type')
-                            ->helperText('Select whether this is a local (Saudi) or international destination')
-                            ->searchable(),
-                    ])->columns(1),
-
                 Forms\Components\Section::make('Basic Information')
                     ->schema([
                         Forms\Components\TextInput::make('title_en')
@@ -55,6 +52,9 @@ class IslandDestinationResource extends Resource
                             ->required()
                             ->label('Title (Arabic)')
                             ->extraAttributes(['dir' => 'rtl']),
+                        
+                        Forms\Components\Hidden::make('type')
+                            ->default('local'),
                     ])->columns(2),
 
                 Forms\Components\Section::make('Description & Location')
@@ -95,6 +95,41 @@ class IslandDestinationResource extends Resource
                         Forms\Components\TagsInput::make('features_ar')
                             ->label('Features (Arabic)')
                             ->placeholder('أدخل الميزات واضغط Enter')
+                            ->extraAttributes(['dir' => 'rtl']),
+                    ])->columns(2),
+
+                Forms\Components\Section::make('Highlights')
+                    ->schema([
+                        Forms\Components\TagsInput::make('highlights_en')
+                            ->label('Highlights (English)')
+                            ->placeholder('Enter highlights and press Enter'),
+                        Forms\Components\TagsInput::make('highlights_ar')
+                            ->label('Highlights (Arabic)')
+                            ->placeholder('أدخل أبرز النقاط واضغط Enter')
+                            ->extraAttributes(['dir' => 'rtl']),
+                    ])->columns(2),
+
+                Forms\Components\Section::make("What's Included")
+                    ->schema([
+                        Forms\Components\TagsInput::make('includes_en')
+                            ->label('Includes (English)')
+                            ->placeholder('Enter what is included and press Enter'),
+                        Forms\Components\TagsInput::make('includes_ar')
+                            ->label('Includes (Arabic)')
+                            ->placeholder('أدخل ما يشمله البرنامج واضغط Enter')
+                            ->extraAttributes(['dir' => 'rtl']),
+                    ])->columns(2),
+
+                Forms\Components\Section::make('Itinerary / Schedule')
+                    ->schema([
+                        Forms\Components\Textarea::make('itinerary_en')
+                            ->label('Itinerary (English)')
+                            ->placeholder('Enter the full trip schedule/itinerary...')
+                            ->rows(10),
+                        Forms\Components\Textarea::make('itinerary_ar')
+                            ->label('Itinerary (Arabic)')
+                            ->placeholder('أدخل جدول الرحلة الكامل...')
+                            ->rows(10)
                             ->extraAttributes(['dir' => 'rtl']),
                     ])->columns(2),
 

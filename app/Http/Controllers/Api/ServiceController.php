@@ -11,18 +11,20 @@ class ServiceController extends Controller
     public function index(Request $request)
     {
         $lang = $request->get('lang', 'ar');
-        // If 'lang' column does not exist (older schema), don't filter by it to avoid SQL errors
+
+        // Build a query and only apply ordering if 'order' column exists (backwards compatibility)
+        $query = Service::where('is_active', true);
+
         if (\Illuminate\Support\Facades\Schema::hasColumn('services', 'lang')) {
-            $services = Service::where('lang', $lang)
-                ->where('is_active', true)
-                ->orderBy('order', 'asc')
-                ->get();
-        } else {
-            $services = Service::where('is_active', true)
-                ->orderBy('order', 'asc')
-                ->get();
+            $query->where('lang', $lang);
         }
-        
+
+        if (\Illuminate\Support\Facades\Schema::hasColumn('services', 'order')) {
+            $query->orderBy('order', 'asc');
+        }
+
+        $services = $query->get();
+
         return response()->json($services);
     }
 

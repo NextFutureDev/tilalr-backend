@@ -7,6 +7,25 @@ Route::get('/', function () {
     return redirect('/admin');
 });
 
+// Local-only debug route to inspect APP_KEY and environment during HTTP requests
+Route::get('/debug_key', function () {
+    if (!app()->environment('local')) {
+        abort(404);
+    }
+
+    $envPath = base_path('.env');
+    $envExists = file_exists($envPath);
+    $envSample = $envExists ? substr(file_get_contents($envPath), 0, 200) : null;
+
+    return response()->json([
+        'env_key' => env('APP_KEY'),
+        'config_key' => config('app.key'),
+        'env_file_exists' => $envExists,
+        'env_sample' => $envSample,
+        'base_path' => base_path(),
+    ]);
+});
+
 // Temporary debug route - only active in local environment
 Route::get('/debug/offers', function () {
     if (!app()->environment('local')) {
@@ -138,3 +157,8 @@ Route::post('/admin/debug-offers/create', function (\Illuminate\Http\Request $re
     return redirect('/admin/debug-offers')->with('success', 'Offer created: ' . $offer->title_en);
 });
 
+// Test upload routes (local only)
+Route::middleware('local-only')->group(function () {
+    Route::post('/test/upload', 'App\Http\Controllers\TestUploadController@upload');
+    Route::post('/test/upload-island/{id}', 'App\Http\Controllers\TestUploadController@setImage');
+});

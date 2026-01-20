@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\ContactResource\Pages;
+use App\Filament\Resources\Concerns\HasResourcePermissions;
 use App\Models\Contact;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ContactResource extends Resource
 {
+    use HasResourcePermissions;
+
     protected static ?string $model = Contact::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-envelope';
@@ -20,13 +23,6 @@ class ContactResource extends Resource
     protected static ?string $navigationGroup = 'Communication';
 
     protected static ?int $navigationSort = 1;
-
-    // All roles can access Contacts (including Super Admin)
-    public static function canAccess(): bool
-    {
-        $user = auth()->user();
-        return $user && ($user->hasRole('executive_manager') || $user->hasRole('consultant') || $user->hasRole('administration') || $user->hasRole('super_admin'));
-    }
 
     public static function getNavigationBadge(): ?string
     {

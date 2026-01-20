@@ -95,4 +95,52 @@ class TripController extends Controller
         
         return response()->json(['message' => 'Trip deleted successfully']);
     }
+
+    /**
+     * Get blocked dates for a specific trip
+     * These are dates that admin has marked as unavailable for booking
+     */
+    public function getBlockedDates($slug)
+    {
+        $trip = Trip::where('slug', $slug)
+            ->orWhere('id', $slug)
+            ->first();
+        
+        if (!$trip) {
+            return response()->json(['data' => [], 'blocked_dates' => []]);
+        }
+        
+        $blockedDates = $trip->blocked_dates ?? [];
+        
+        return response()->json([
+            'data' => $blockedDates,
+            'blocked_dates' => $blockedDates,
+            'trip_slug' => $trip->slug,
+            'trip_title' => $trip->title,
+        ]);
+    }
+
+    /**
+     * Update blocked dates for a trip (admin only)
+     */
+    public function updateBlockedDates(Request $request, $slug)
+    {
+        $trip = Trip::where('slug', $slug)
+            ->orWhere('id', $slug)
+            ->firstOrFail();
+        
+        $validated = $request->validate([
+            'blocked_dates' => 'nullable|array',
+            'blocked_dates.*' => 'date_format:Y-m-d',
+        ]);
+        
+        $trip->blocked_dates = $validated['blocked_dates'] ?? [];
+        $trip->save();
+        
+        return response()->json([
+            'message' => 'Blocked dates updated successfully',
+            'data' => $trip->blocked_dates,
+            'blocked_dates' => $trip->blocked_dates,
+        ]);
+    }
 }

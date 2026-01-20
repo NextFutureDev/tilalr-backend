@@ -35,6 +35,7 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 Pages\Dashboard::class,
             ])
+            // Re-enable widgets one-by-one to diagnose slow widget
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 Widgets\AccountWidget::class,
@@ -53,17 +54,21 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
+                \App\Http\Middleware\AdminAccessMiddleware::class,
             ])
             ->maxContentWidth('full')
             ->brandName('Admin Panel')
             ->favicon(asset('favicon.ico'))
             ->navigationGroups([
-                'Content Management',
-                'Team Management',
-                'User Management',
-                'Settings',
-                'Users',
                 'Administration',
+                'Users', 
+                'Content',
+                'Local Destinations',
+                'International Destinations',
+                'Reservations & Bookings',
+                'Payments',
+                'Communication',
+                'Settings',
                 'Website',
             ]);
     }

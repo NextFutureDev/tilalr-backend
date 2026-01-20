@@ -8,7 +8,6 @@ use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\TripController;
 use App\Http\Controllers\Api\CityController;
 use App\Http\Controllers\Api\TestimonialController;
-use App\Http\Controllers\Api\TeamMemberController;
 use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BookingController;
@@ -21,6 +20,7 @@ use App\Http\Controllers\Api\InternationalDestinationController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\TestDataController;
 use App\Http\Controllers\Api\IslandDestinationController;
+use App\Http\Controllers\Api\CustomPaymentOfferController;
 
 // Health check routes
 Route::get('/health', [HealthController::class, 'check']);
@@ -31,7 +31,26 @@ Route::post('/test-data/create-users', [TestDataController::class, 'createTestUs
 
 // Authentication routes
 Route::post('/register', [AuthController::class, 'register']);
+// Check if an email is already registered (used by frontend for instant validation)
+Route::get('/users/exists', [AuthController::class, 'emailExists']);
 Route::post('/login', [AuthController::class, 'login']);
+
+// OTP endpoints
+Route::post('/auth/send-otp', [\App\Http\Controllers\Api\OtpController::class, 'send']);
+Route::post('/auth/verify-otp', [\App\Http\Controllers\Api\OtpController::class, 'verify']);
+// Password reset via OTP
+Route::post('/auth/reset-password', [\App\Http\Controllers\Api\OtpController::class, 'resetPassword']);
+
+// SMS Testing Routes (protect in production!)
+Route::prefix('sms')->group(function () {
+    Route::get('/status', [\App\Http\Controllers\Api\SmsController::class, 'status']);
+    Route::post('/test', [\App\Http\Controllers\Api\SmsController::class, 'sendTest']);
+    Route::get('/taqnyat/system', [\App\Http\Controllers\Api\SmsController::class, 'taqnyatSystem']);
+    Route::get('/taqnyat/balance', [\App\Http\Controllers\Api\SmsController::class, 'taqnyatBalance']);
+    Route::get('/taqnyat/senders', [\App\Http\Controllers\Api\SmsController::class, 'taqnyatSenders']);
+    Route::get('/taqnyat/test', [\App\Http\Controllers\Api\SmsController::class, 'taqnyatFullTest']);
+    Route::post('/taqnyat/send', [\App\Http\Controllers\Api\SmsController::class, 'taqnyatSend']);
+});
 
 // Public API routes for frontend
 Route::get('/pages', [PageController::class, 'index']);
@@ -45,6 +64,7 @@ Route::get('/products/{slug}', [ProductController::class, 'show']);
 
 Route::get('/trips', [TripController::class, 'index']);
 Route::get('/trips/{slug}', [TripController::class, 'show']);
+Route::get('/trips/{slug}/blocked-dates', [TripController::class, 'getBlockedDates']);
 
 Route::get('/cities', [CityController::class, 'index']);
 Route::get('/cities/{slug}', [CityController::class, 'show']);
@@ -52,8 +72,7 @@ Route::get('/cities/{slug}', [CityController::class, 'show']);
 Route::get('/testimonials', [TestimonialController::class, 'index']);
 Route::get('/testimonials/{id}', [TestimonialController::class, 'show']);
 
-Route::get('/team-members', [TeamMemberController::class, 'index']);
-Route::get('/team-members/{id}', [TeamMemberController::class, 'show']);
+
 
 Route::get('/settings', [SettingController::class, 'index']);
 Route::get('/settings/{key}', [SettingController::class, 'show']);
@@ -90,6 +109,8 @@ Route::get('/island-destinations/{id}', [IslandDestinationController::class, 'sh
 // Allow creating a new island destination (accepts city_id or city_name to link city)
 Route::post('/island-destinations', [IslandDestinationController::class, 'store']);
 
+
+
 // Protected routes (require authentication)
 Route::middleware('auth:sanctum')->group(function () {
     // User authentication routes
@@ -103,6 +124,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/bookings/{id}', [BookingController::class, 'show']);
     Route::put('/bookings/{id}', [BookingController::class, 'update']);
     Route::delete('/bookings/{id}', [BookingController::class, 'destroy']);
+    
+    // User reservations (get their pending reservations by email)
+    Route::get('/my-reservations', [ReservationController::class, 'myReservations']);
     
     // User payments
     Route::post('/payments/initiate', [PaymentController::class, 'initiate']);
@@ -170,6 +194,7 @@ Route::prefix('admin')->group(function () {
     Route::post('/trips', [TripController::class, 'store']);
     Route::put('/trips/{id}', [TripController::class, 'update']);
     Route::delete('/trips/{id}', [TripController::class, 'destroy']);
+    Route::put('/trips/{slug}/blocked-dates', [TripController::class, 'updateBlockedDates']);
     
     Route::post('/cities', [CityController::class, 'store']);
     Route::put('/cities/{id}', [CityController::class, 'update']);
@@ -179,9 +204,7 @@ Route::prefix('admin')->group(function () {
     Route::put('/testimonials/{id}', [TestimonialController::class, 'update']);
     Route::delete('/testimonials/{id}', [TestimonialController::class, 'destroy']);
     
-    Route::post('/team-members', [TeamMemberController::class, 'store']);
-    Route::put('/team-members/{id}', [TeamMemberController::class, 'update']);
-    Route::delete('/team-members/{id}', [TeamMemberController::class, 'destroy']);
+
     
     Route::post('/settings', [SettingController::class, 'store']);
     Route::put('/settings/{key}', [SettingController::class, 'update']);
@@ -195,4 +218,24 @@ Route::prefix('admin')->group(function () {
     Route::post('/reservations/{id}/mark-contacted', [ReservationController::class, 'markContacted']);
     Route::post('/reservations/{id}/convert-to-booking', [ReservationController::class, 'convertToBooking']);
     Route::delete('/reservations/{id}', [ReservationController::class, 'destroy']);
+    
+    // Custom Payment Offers (Super Admin only)
+    Route::post('/custom-payment-offers', [CustomPaymentOfferController::class, 'create']);
+    Route::get('/custom-payment-offers', [CustomPaymentOfferController::class, 'list']);
+    Route::delete('/custom-payment-offers/{id}', [CustomPaymentOfferController::class, 'delete']);
 });
+
+// ============================================
+// CUSTOM PAYMENT OFFERS (Public Routes)
+// ============================================
+// Customer payment page - fetch offer details
+Route::get('/custom-payment-offers/{uniqueLink}', [CustomPaymentOfferController::class, 'show']);
+
+// Payment callbacks (from Moyasar)
+Route::post('/custom-payment-offers/{uniqueLink}/payment-success', [CustomPaymentOfferController::class, 'paymentSuccess']);
+Route::get('/custom-payment-offers/{uniqueLink}/payment-success', [CustomPaymentOfferController::class, 'paymentSuccess']); // Moyasar redirects via GET
+Route::post('/custom-payment-offers/{uniqueLink}/payment-failed', [CustomPaymentOfferController::class, 'paymentFailed']);
+
+// Moyasar Webhook for custom payment offers
+Route::post('/webhooks/moyasar/custom-payment', [CustomPaymentOfferController::class, 'moyasarWebhook']);
+

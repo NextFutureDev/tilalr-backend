@@ -4,382 +4,416 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Payment;
-use App\Models\Booking;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Models\Booking;
 
 class PaymentController extends Controller
 {
     /**
-     * Get all payments for authenticated user
+     * List payments (admin => all, user => own payments).
+     * Returns an array in 'payments' so frontend code expecting paymentsRes.payments works.
      */
     public function index(Request $request)
     {
-        $payments = Payment::with('booking')
-            ->whereHas('booking', function($query) use ($request) {
-                $query->where('user_id', $request->user()->id);
-            })
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+        }
 
-        return response()->json(['payments' => $payments]);
+        try {
+            if (method_exists($user, 'hasRole') && $user->hasRole('admin')) {
+                // Admin: all payments (if Payment model exists), otherwise map bookings
+                if (class_exists(\App\Models\Payment::class)) {
+                    $payments = \App\Models\Payment::orderBy('created_at', 'desc')->get();
+                } else {
+                    $payments = Booking::orderBy('created_at', 'desc')->get()->map(function ($b) {
+                        return [
+                            'id' => $b->id,
+                            'booking_id' => $b->id,
+                            'status' => $b->payment_status,
+                            'amount' => $b->paid_amount ?? $b->amount,
+                            'currency' => 'SAR',
+                            'created_at' => $b->updated_at ?? $b->created_at,
+                        ];
+                    });
+                }
+            } else {
+                // Regular user: only their payments/bookings
+                if (class_exists(\App\Models\Payment::class)) {
+                    // The payments table stores booking_id but not user_id. Filter by the related booking's user_id.
+                    $payments = \App\Models\Payment::whereHas('booking', function ($q) use ($user) {
+                        $q->where('user_id', $user->id);
+                    })->orderBy('created_at', 'desc')->get();
+                } else {
+                    $payments = Booking::where('user_id', $user->id)->orderBy('created_at', 'desc')->get()->map(function ($b) {
+                        return [
+                            'id' => $b->id,
+                            'booking_id' => $b->id,
+                            'status' => $b->payment_status,
+                            'amount' => $b->paid_amount ?? $b->amount,
+                            'currency' => 'SAR',
+                            'created_at' => $b->updated_at ?? $b->created_at,
+                        ];
+                    });
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'payments' => $payments,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Payments index failed', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Failed to fetch payments'], 500);
+        }
     }
 
     /**
-     * Initiate payment (create payment session and return payment URL)
+     * Show single payment (by id) - works with Payment model or falls back to booking record.
      */
+    public function show(Request $request, $id)
+    {
+        try {
+            if (class_exists(\App\Models\Payment::class)) {
+                $payment = \App\Models\Payment::find($id);
+                if (!$payment) return response()->json(['success' => false, 'message' => 'Payment not found'], 404);
+                // If user is not admin, ensure payment belongs to them by checking the related booking's user_id
+                $user = $request->user();
+                if ($user && !(method_exists($user, 'hasRole') && $user->hasRole('admin'))) {
+                    // payment->booking may be null if booking deleted; deny access in that case
+                    $booking = $payment->booking;
+                    if (!$booking || $booking->user_id != $user->id) {
+                        return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+                    }
+                }
+            }
+
+            // Fallback: treat booking as payment-like record
+            $booking = Booking::find($id);
+            if (!$booking) return response()->json(['success' => false, 'message' => 'Payment not found'], 404);
+
+            $user = $request->user();
+            if ($user && !(method_exists($user, 'hasRole') && $user->hasRole('admin'))) {
+                $ownsBooking = $booking->user_id === $user->id;
+                $emailMatches = isset($booking->details['email']) && $booking->details['email'] === $user->email;
+                if (! $ownsBooking && ! $emailMatches) {
+                    return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+                }
+            }
+            $record = [
+                'id' => $booking->id,
+                'booking_id' => $booking->id,
+                'status' => $booking->payment_status,
+                'amount' => $booking->paid_amount ?? $booking->amount,
+                'currency' => 'SAR',
+                'created_at' => $booking->updated_at ?? $booking->created_at,
+            ];
+
+            return response()->json(['success' => true, 'payment' => $record]);
+        } catch (\Exception $e) {
+            Log::error('Payment show failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Failed to fetch payment'], 500);
+        }
+    }
+
     public function initiate(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        Log::info('Payment initiation request', $request->all());
+
+        // Validate request
+        $request->validate([
             'booking_id' => 'required|exists:bookings,id',
-            'amount' => 'required|numeric|min:0',
-            'method' => 'required|string|in:credit_card,mada,apple_pay',
-            'gateway' => 'nullable|string|in:telr,moyasar,test',
+            'amount' => 'sometimes|numeric|min:1',
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
+        // Get the booking
+        $booking = Booking::find($request->input('booking_id'));
 
-        $booking = Booking::find($request->booking_id);
-
-        // Verify booking belongs to user
-        if ($booking->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-
-        // Check if booking already paid
-        if ($booking->payment_status === 'paid') {
-            return response()->json(['message' => 'Booking already paid'], 422);
-        }
-
-        // Create payment record
-        $payment = Payment::create([
-            'booking_id' => $booking->id,
-            'method' => $request->method,
-            'status' => 'pending',
-            'transaction_id' => null,
-            'meta' => [
-                'amount' => $request->amount,
-                'currency' => 'SAR',
-                'gateway' => $request->gateway ?? 'test',
-                'initiated_at' => now()->toISOString(),
-            ]
-        ]);
-
-        // Choose gateway
-        $gateway = $request->gateway ?? 'test';
-
-        if ($gateway === 'telr') {
-            $result = $this->initiateTelrPayment($payment, $booking, $request->amount);
-        } elseif ($gateway === 'moyasar') {
-            $result = $this->initiateMoyasarPayment($payment, $booking, $request->amount);
-        } else {
-            // Test mode - no real payment
-            $result = $this->initiateTestPayment($payment, $booking, $request->amount);
-        }
-
-        if ($result['success']) {
+        if (!$booking) {
             return response()->json([
-                'payment' => $payment->fresh(),
-                'payment_url' => $result['payment_url'] ?? null,
-                'redirect_url' => $result['redirect_url'] ?? null,
-                'message' => 'Payment initiated successfully'
+                'success' => false,
+                'message' => 'Booking not found'
+            ], 404);
+        }
+
+        // Use booking amount if not provided (already in SAR)
+        $amountInSar = $request->input('amount', $booking->amount ?? 100);
+        
+        // Convert SAR to halalas (1 SAR = 100 halalas)
+        $amountInHalalas = $amountInSar * 100;
+
+        // Moyasar configuration with Apple Pay disabled
+        $moyasarConfig = [
+            'publishable_api_key' => env('MOYASAR_PUBLISHABLE_KEY', 'pk_live_JjGYt4f9iWDGpc9uCE9FCMBvZ9u5FBa5SsQvEFAY'),
+            'amount' => $amountInHalalas, // Amount in halalas
+            'currency' => 'SAR', // Saudi Riyals
+            'description' => 'دفع حجز - ' . ($booking->trip_slug ?? 'حجز'),
+            'callback_url' => config('app.frontend_url') . '/payment-callback',
+            // Explicitly specify payment methods to disable Apple Pay
+            'methods' => ['creditcard', 'stcpay'],
+            'metadata' => [
+                'booking_id' => $booking->id,
+                'user_id' => $booking->user_id ?? null,
+                'trip_slug' => $booking->trip_slug ?? 'unknown',
+                'amount_sar' => $amountInSar,
+            ],
+            'language' => 'ar',
+            'on_close' => config('app.frontend_url') . '/booking/' . $booking->id,
+        ];
+
+        Log::info('Payment initiated', [
+            'booking_id' => $booking->id,
+            'amount_sar' => $amountInSar,
+            'amount_halalas' => $amountInHalalas
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم بدء عملية الدفع بنجاح',
+            'payment_id' => 'PAY-' . time() . '-' . $booking->id,
+            'booking_id' => $booking->id,
+            'amount' => $amountInSar,
+            'amount_halalas' => $amountInHalalas,
+            'currency' => 'SAR',
+            'moyasar_config' => $moyasarConfig,
+        ]);
+    }
+
+    /**
+     * Handle Moyasar payment callback (webhook)
+     */
+    public function callback(Request $request)
+    {
+        Log::info('Payment callback received', $request->all());
+
+        $data = $request->all();
+        
+        // Verify payment with Moyasar API
+        $paymentId = $data['id'] ?? null;
+        
+        if (!$paymentId) {
+            Log::error('Payment callback missing ID', $data);
+            return response()->json(['success' => false, 'message' => 'Invalid callback']);
+        }
+
+        // Verify payment using Moyasar API
+        $payment = $this->verifyPayment($paymentId);
+        
+        if (!$payment) {
+            Log::error('Payment verification failed', ['payment_id' => $paymentId]);
+            return response()->json(['success' => false, 'message' => 'Payment verification failed']);
+        }
+
+        // Verify currency is SAR
+        if (($payment['currency'] ?? '') !== 'SAR') {
+            Log::error('Invalid currency in payment', [
+                'payment_id' => $paymentId,
+                'currency' => $payment['currency'] ?? 'unknown',
+                'expected' => 'SAR'
+            ]);
+            return response()->json(['success' => false, 'message' => 'Invalid currency']);
+        }
+
+        // Get booking ID from metadata
+        $bookingId = $payment['metadata']['booking_id'] ?? null;
+        
+        if (!$bookingId) {
+            Log::error('No booking ID in payment metadata', $payment);
+            return response()->json(['success' => false, 'message' => 'No booking associated']);
+        }
+
+        // Update booking payment status
+        $booking = Booking::find($bookingId);
+        
+        if (!$booking) {
+            Log::error('Booking not found', ['booking_id' => $bookingId]);
+            return response()->json(['success' => false, 'message' => 'Booking not found']);
+        }
+
+        $amountInHalalas = $payment['amount'] ?? 0;
+        $amountInSar = $amountInHalalas / 100;
+        $originalAmountSar = $payment['metadata']['amount_sar'] ?? $amountInSar;
+        $status = $payment['status'] ?? 'failed';
+        
+        if ($status === 'paid') {
+            $booking->update([
+                'payment_status' => 'paid',
+                'status' => 'confirmed',
+                'amount' => $originalAmountSar,
+                'paid_amount' => $amountInSar,
+                'payment_method' => $payment['source']['type'] ?? 'unknown',
+                'transaction_id' => $paymentId,
+                'payment_details' => [
+                    'payment_id' => $paymentId,
+                    'method' => $payment['source']['type'] ?? 'unknown',
+                    'amount_halalas' => $amountInHalalas,
+                    'amount_sar' => $amountInSar,
+                    'currency' => $payment['currency'] ?? 'SAR',
+                    'transaction_id' => $payment['id'] ?? $paymentId,
+                    'data' => $payment
+                ],
+                'paid_at' => now(),
+            ]);
+            
+            Log::info('Payment completed successfully', [
+                'booking_id' => $bookingId,
+                'payment_id' => $paymentId,
+                'amount_sar' => $amountInSar,
+                'method' => $payment['source']['type'] ?? 'unknown'
             ]);
         } else {
+            $booking->update([
+                'payment_status' => 'failed',
+                'status' => 'cancelled',
+                'payment_details' => [
+                    'payment_id' => $paymentId,
+                    'status' => $status,
+                    'amount_halalas' => $amountInHalalas,
+                    'amount_sar' => $amountInSar,
+                    'error' => $payment['message'] ?? 'Payment failed'
+                ]
+            ]);
+            
+            Log::warning('Payment failed', [
+                'booking_id' => $bookingId,
+                'payment_id' => $paymentId,
+                'status' => $status,
+                'amount_sar' => $amountInSar
+            ]);
+        }
+
+        return response()->json([
+            'success' => $status === 'paid',
+            'message' => $status === 'paid' ? 'تم الدفع بنجاح' : 'فشل عملية الدفع',
+            'booking_id' => $bookingId,
+            'status' => $status,
+            'amount_sar' => $amountInSar,
+            'currency' => 'SAR',
+            'redirect_url' => config('app.frontend_url') . '/booking/' . $bookingId . '?payment=' . $status
+        ]);
+    }
+
+    /**
+     * Webhook wrappers for different gateways
+     * These simply forward to callback for now to avoid missing method errors.
+     */
+    public function telrWebhook(Request $request)
+    {
+        return $this->callback($request);
+    }
+
+    public function moyasarWebhook(Request $request)
+    {
+        return $this->callback($request);
+    }
+
+    /**
+     * Verify payment with Moyasar API
+     */
+    private function verifyPayment($paymentId)
+    {
+        try {
+            $secretKey = env('MOYASAR_SECRET_KEY', 'sk_live_CqsRUfH7SJ5H2dnJvdk654F4LvZb9FZs7ipNwyZJ');
+            
+            $client = new \GuzzleHttp\Client();
+            $response = $client->get("https://api.moyasar.com/v1/payments/{$paymentId}", [
+                'auth' => [$secretKey, ''],
+                'headers' => [
+                    'Accept' => 'application/json',
+                ],
+            ]);
+
+            $paymentData = json_decode($response->getBody(), true);
+            
+            Log::info('Payment verification response', [
+                'payment_id' => $paymentId,
+                'currency' => $paymentData['currency'] ?? 'unknown',
+                'amount' => $paymentData['amount'] ?? 0
+            ]);
+            
+            return $paymentData;
+            
+        } catch (\Exception $e) {
+            Log::error('Payment verification error', [
+                'payment_id' => $paymentId,
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Check payment status
+     */
+    public function checkStatus(Request $request, $paymentId)
+    {
+        try {
+            $payment = $this->verifyPayment($paymentId);
+            
+            if (!$payment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'لم يتم العثور على عملية الدفع'
+                ], 404);
+            }
+
+            // Convert halalas to SAR
+            $amountInHalalas = $payment['amount'] ?? 0;
+            $amountInSar = $amountInHalalas / 100;
+
             return response()->json([
-                'message' => 'Failed to initiate payment',
-                'error' => $result['error'] ?? 'Unknown error'
+                'success' => true,
+                'payment' => [
+                    'id' => $payment['id'] ?? $paymentId,
+                    'status' => $payment['status'] ?? 'unknown',
+                    'amount_halalas' => $amountInHalalas,
+                    'amount_sar' => $amountInSar,
+                    'currency' => $payment['currency'] ?? 'SAR',
+                    'method' => $payment['source']['type'] ?? 'unknown',
+                    'created_at' => $payment['created_at'] ?? null,
+                    'metadata' => $payment['metadata'] ?? [],
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Payment status check error', [
+                'payment_id' => $paymentId,
+                'error' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'فشل في التحقق من حالة الدفع'
             ], 500);
         }
     }
 
     /**
-     * Initiate Telr payment
+     * Test payment endpoint
      */
-    private function initiateTelrPayment($payment, $booking, $amount)
+    public function test(Request $request)
     {
-        // Telr Test Mode Configuration
-        $storeId = config('services.telr.store_id', '25484'); // Test store ID
-        $authKey = config('services.telr.auth_key', 'tF@zx^Gq5W'); // Test auth key
+        $testAmount = $request->input('amount', 100); // Default 100 SAR
         
-        $returnUrl = config('app.frontend_url') . '/payment/callback';
-        $callbackUrl = config('app.url') . '/api/payments/webhook/telr';
-
-        try {
-            $response = Http::post('https://secure.telr.com/gateway/order.json', [
-                'method' => 'create',
-                'store' => $storeId,
-                'authkey' => $authKey,
-                'order' => [
-                    'cartid' => $payment->id,
-                    'test' => 1, // Test mode
-                    'amount' => $amount,
-                    'currency' => 'SAR',
-                    'description' => "Booking #{$booking->id} - Tilal Rimal",
-                ],
-                'return' => [
-                    'authorised' => $returnUrl . '?status=success&payment_id=' . $payment->id,
-                    'declined' => $returnUrl . '?status=declined&payment_id=' . $payment->id,
-                    'cancelled' => $returnUrl . '?status=cancelled&payment_id=' . $payment->id,
-                ],
-                'webhook' => [
-                    'url' => $callbackUrl,
-                ],
-            ]);
-
-            $data = $response->json();
-
-            if (isset($data['order']['url'])) {
-                // Update payment with transaction reference
-                $payment->update([
-                    'transaction_id' => $data['order']['ref'] ?? null,
-                    'meta' => array_merge($payment->meta ?? [], [
-                        'telr_order_ref' => $data['order']['ref'] ?? null,
-                        'telr_response' => $data,
-                    ])
-                ]);
-
-                return [
-                    'success' => true,
-                    'payment_url' => $data['order']['url'],
-                    'redirect_url' => $data['order']['url'],
-                ];
-            }
-
-            return [
-                'success' => false,
-                'error' => $data['error']['message'] ?? 'Failed to create Telr order'
-            ];
-
-        } catch (\Exception $e) {
-            Log::error('Telr payment initiation failed: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Initiate Moyasar payment
-     */
-    private function initiateMoyasarPayment($payment, $booking, $amount)
-    {
-        $apiKey = config('services.moyasar.api_key', 'pk_test_vcFUHJDBwiyRu4Bd3hFuPpThb6Zf2eMn8wGzxHJ');
-        $callbackUrl = config('app.frontend_url') . '/payment/callback?payment_id=' . $payment->id;
-
-        try {
-            $response = Http::withBasicAuth($apiKey, '')
-                ->post('https://api.moyasar.com/v1/payments', [
-                    'amount' => $amount * 100, // Amount in halalas
-                    'currency' => 'SAR',
-                    'description' => "Booking #{$booking->id} - Tilal Rimal",
-                    'callback_url' => $callbackUrl,
-                    'source' => [
-                        'type' => 'creditcard',
-                    ],
-                ]);
-
-            $data = $response->json();
-
-            if (isset($data['id'])) {
-                $payment->update([
-                    'transaction_id' => $data['id'],
-                    'meta' => array_merge($payment->meta ?? [], [
-                        'moyasar_payment_id' => $data['id'],
-                        'moyasar_response' => $data,
-                    ])
-                ]);
-
-                return [
-                    'success' => true,
-                    'payment_url' => $data['source']['transaction_url'] ?? null,
-                    'redirect_url' => $data['source']['transaction_url'] ?? null,
-                ];
-            }
-
-            return [
-                'success' => false,
-                'error' => $data['message'] ?? 'Failed to create Moyasar payment'
-            ];
-
-        } catch (\Exception $e) {
-            Log::error('Moyasar payment initiation failed: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Initiate test payment (for development)
-     */
-    private function initiateTestPayment($payment, $booking, $amount)
-    {
-        // Immediately mark as paid for test mode (no external gateway)
-        $payment->update([
-            'status' => 'paid',
-            'transaction_id' => 'TEST_' . time(),
-            'meta' => array_merge($payment->meta ?? [], [
-                'test_mode' => true,
-                'amount' => $amount,
-                'paid_at' => now()->toISOString(),
-            ]),
-        ]);
-
-        $booking->update([
-            'payment_status' => 'paid',
-            'status' => 'confirmed',
-        ]);
-
-        return [
-            'success' => true,
-            'payment_url' => null,
-            'redirect_url' => null,
+        $moyasarConfig = [
+            'publishable_api_key' => env('MOYASAR_PUBLISHABLE_KEY', 'pk_live_JjGYt4f9iWDGpc9uCE9FCMBvZ9u5FBa5SsQvEFAY'),
+            'amount' => $testAmount * 100, // Convert to halalas
+            'currency' => 'SAR',
+            'description' => 'دفع تجريبي',
+            'callback_url' => config('app.frontend_url') . '/payment-callback',
+            'methods' => ['creditcard', 'stcpay'], // Apple Pay disabled
+            'language' => 'ar',
+            'metadata' => [
+                'test' => true,
+                'amount_sar' => $testAmount,
+            ],
         ];
-    }
-
-    /**
-     * Telr webhook handler
-     */
-    public function telrWebhook(Request $request)
-    {
-        Log::info('Telr webhook received', $request->all());
-
-        $cartId = $request->input('cartid');
-        $status = $request->input('status');
-        $transactionRef = $request->input('tranref');
-
-        $payment = Payment::find($cartId);
-
-        if (!$payment) {
-            Log::error('Payment not found for Telr webhook', ['cart_id' => $cartId]);
-            return response()->json(['message' => 'Payment not found'], 404);
-        }
-
-        $booking = $payment->booking;
-
-        if ($status === 'A') { // Authorised
-            $payment->update([
-                'status' => 'paid',
-                'transaction_id' => $transactionRef,
-                'meta' => array_merge($payment->meta ?? [], [
-                    'telr_webhook' => $request->all(),
-                    'paid_at' => now()->toISOString(),
-                ])
-            ]);
-
-            $booking->update([
-                'payment_status' => 'paid',
-                'status' => 'confirmed',
-            ]);
-
-            return response()->json(['message' => 'Payment confirmed']);
-        } elseif ($status === 'D') { // Declined
-            $payment->update([
-                'status' => 'failed',
-                'meta' => array_merge($payment->meta ?? [], [
-                    'telr_webhook' => $request->all(),
-                    'declined_at' => now()->toISOString(),
-                ])
-            ]);
-
-            return response()->json(['message' => 'Payment declined']);
-        }
-
-        return response()->json(['message' => 'Webhook received']);
-    }
-
-    /**
-     * Moyasar webhook handler
-     */
-    public function moyasarWebhook(Request $request)
-    {
-        Log::info('Moyasar webhook received', $request->all());
-
-        $paymentId = $request->input('id');
-        $status = $request->input('status');
-
-        $payment = Payment::where('transaction_id', $paymentId)->first();
-
-        if (!$payment) {
-            Log::error('Payment not found for Moyasar webhook', ['payment_id' => $paymentId]);
-            return response()->json(['message' => 'Payment not found'], 404);
-        }
-
-        $booking = $payment->booking;
-
-        if ($status === 'paid') {
-            $payment->update([
-                'status' => 'paid',
-                'meta' => array_merge($payment->meta ?? [], [
-                    'moyasar_webhook' => $request->all(),
-                    'paid_at' => now()->toISOString(),
-                ])
-            ]);
-
-            $booking->update([
-                'payment_status' => 'paid',
-                'status' => 'confirmed',
-            ]);
-
-            return response()->json(['message' => 'Payment confirmed']);
-        } elseif ($status === 'failed') {
-            $payment->update([
-                'status' => 'failed',
-                'meta' => array_merge($payment->meta ?? [], [
-                    'moyasar_webhook' => $request->all(),
-                    'failed_at' => now()->toISOString(),
-                ])
-            ]);
-
-            return response()->json(['message' => 'Payment failed']);
-        }
-
-        return response()->json(['message' => 'Webhook received']);
-    }
-
-    /**
-     * Payment callback (user returns from payment gateway)
-     */
-    public function callback(Request $request)
-    {
-        $paymentId = $request->input('payment_id');
-        $status = $request->input('status', 'pending');
-
-        $payment = Payment::find($paymentId);
-
-        if (!$payment) {
-            return response()->json(['message' => 'Payment not found'], 404);
-        }
 
         return response()->json([
-            'payment' => $payment->fresh(),
-            'booking' => $payment->booking,
-            'status' => $status,
+            'success' => true,
+            'message' => 'Test payment configuration',
+            'config' => $moyasarConfig,
+            'note' => 'Amount in SAR: ' . $testAmount . ' SAR = ' . ($testAmount * 100) . ' halalas'
         ]);
-    }
-
-    /**
-     * Get payment details
-     */
-    public function show(Request $request, $id)
-    {
-        $payment = Payment::with('booking')->find($id);
-
-        if (!$payment) {
-            return response()->json(['message' => 'Payment not found'], 404);
-        }
-
-        // Verify user can access this payment
-        if ($request->user() && $payment->booking->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-
-        return response()->json(['payment' => $payment]);
     }
 }

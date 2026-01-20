@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\OfferResource\Pages;
+use App\Filament\Resources\Concerns\HasResourcePermissions;
 use App\Models\Offer;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -15,6 +16,8 @@ use App\Models\Offer as OfferModel;
 
 class OfferResource extends Resource
 {
+    use HasResourcePermissions;
+
     protected static ?string $model = Offer::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';
@@ -22,13 +25,6 @@ class OfferResource extends Resource
     protected static ?string $navigationLabel = 'Offers';
     
     protected static ?string $navigationGroup = 'Content';
-
-    // Consultant and Super Admin can access
-    public static function canAccess(): bool
-    {
-        $user = auth()->user();
-        return $user && ($user->hasRole('consultant') || $user->hasRole('super_admin'));
-    }
 
     public static function form(Form $form): Form
     {

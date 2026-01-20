@@ -745,9 +745,7 @@
                         @if($trainings->count() > 0)
                         <li class="nav-item"><a class="nav-link" href="#training">{{ __('messages.training') }}</a></li>
                         @endif
-                        @if($teamMembers->count() > 0)
-                        <li class="nav-item"><a class="nav-link" href="#team">{{ __('messages.team') }}</a></li>
-                        @endif
+
                         <li class="nav-item"><a class="nav-link" href="#contact">{{ __('messages.contact') }}</a></li>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="languageDropdown" role="button" aria-expanded="false">
@@ -1059,78 +1057,7 @@
         </section>
         @endif
         
-        <!-- Team Members Section-->
-        @if($teamMembers->count() > 0)
-        <section class="page-section bg-light" id="team" data-aos="zoom-out-down">
-            <div class="container px-4 px-lg-5">
-                <div class="text-center" data-aos="zoom-out-down" data-aos-delay="100">
-                    <h2 class="mt-0">{{ __('messages.our_team') }}</h2>
-                    <hr class="divider" />
-                    <p class="text-muted mb-5">{{ __('messages.meet_the_team') }}</p>
-                </div>
-                <div class="team-slider-container" lang="{{ app()->getLocale() }}">
-                    <div class="team-slider" id="homeTeamSlider">
-                        @foreach($teamMembers as $member)
-                            <div class="team-member-card" lang="{{ app()->getLocale() }}" data-aos="zoom-out-down" data-aos-delay="{{ ($loop->index % 4) * 100 }}">
-                                <div class="member-image-container">
-                                    @if($member->image)
-                                        <img src="{{ asset('storage/' . $member->image) }}" 
-                                             alt="{{ $member->getTranslation('name', app()->getLocale()) }}" 
-                                             class="member-image">
-                                    @else
-                                        <div class="member-placeholder">
-                                            <i class="bi bi-person-fill"></i>
-                                        </div>
-                                    @endif
-                                </div>
-                                <div class="member-info">
-                                    <h5 class="member-role">
-                                        @if($member->role_id && $member->roleRelation)
-                                            {{ $member->roleRelation->title }}
-                                        @else
-                                        {{ $member->getTranslation('role', app()->getLocale()) }}
-                                        @endif
-                                    </h5>
-                                    <h4 class="member-name">{{ $member->getTranslation('name', app()->getLocale()) }}</h4>
-                                    <p class="member-bio">
-                                        @if(app()->getLocale() === 'ar')
-                                            {!! str_replace(['JavaScript', 'React', 'Node.js', 'Python', 'TensorFlow', 'CISSP', 'CEH', 'Scrum', 'Fortune 50'], 
-                                                ['<span class="english-term">JavaScript</span>', 
-                                                 '<span class="english-term">React</span>', 
-                                                 '<span class="english-term">Node.js</span>', 
-                                                 '<span class="english-term">Python</span>', 
-                                                 '<span class="english-term">TensorFlow</span>', 
-                                                 '<span class="english-term">CISSP</span>', 
-                                                 '<span class="english-term">CEH</span>', 
-                                                 '<span class="english-term">Scrum</span>', 
-                                                 '<span class="english-term">Fortune 50</span>'], 
-                                                $member->getTranslation('bio', app()->getLocale())) !!}
-                                        @else
-                                            {{ $member->getTranslation('bio', app()->getLocale()) }}
-                                        @endif
-                                    </p>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                    
-                    @if(count($teamMembers) > 3)
-                        <div class="slider-controls">
-                            <button class="slider-btn prev-btn">
-                                <i class="bi bi-chevron-{{ app()->getLocale() === 'ar' ? 'right' : 'left' }}"></i>
-                            </button>
-                            <button class="slider-btn next-btn">
-                                <i class="bi bi-chevron-{{ app()->getLocale() === 'ar' ? 'left' : 'right' }}"></i>
-                            </button>
-                        </div>
-                    @endif
-                </div>
-                <div class="text-center mt-4">
-                    <a href="{{ route(app()->getLocale() . '.team.index') }}" class="btn btn-seeall">{{ __('messages.meet_the_team') }}</a>
-                </div>
-            </div>
-        </section>
-        @endif
+
         
         <!-- Contact-->
         <section class="page-section" id="contact" data-aos="zoom-out-right">

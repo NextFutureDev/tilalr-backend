@@ -78,6 +78,11 @@ class User extends Authenticatable implements FilamentUser
      */
     public function hasPermission($permission): bool
     {
+        // Super admin has all permissions
+        if ($this->hasRole('super_admin')) {
+            return true;
+        }
+
         // Check all roles for the permission
         foreach ($this->roles as $role) {
             if ($role->hasPermission($permission)) {
@@ -85,6 +90,14 @@ class User extends Authenticatable implements FilamentUser
             }
         }
         return false;
+    }
+
+    /**
+     * Check if user can perform action on resource
+     */
+    public function canDo(string $action, string $resource): bool
+    {
+        return $this->hasPermission("{$resource}.{$action}");
     }
 
     /**
@@ -117,8 +130,12 @@ class User extends Authenticatable implements FilamentUser
     public function canAccessPanel(Panel $panel): bool
     {
         return $this->is_admin
+            || $this->hasRole('super_admin')
             || $this->hasRole('executive_manager')
             || $this->hasRole('consultant')
-            || $this->hasRole('administration');
+            || $this->hasRole('administration')
+            || $this->hasRole('content_manager')
+            || $this->hasRole('support_agent')
+            || $this->hasRole('data_analyst');
     }
 }

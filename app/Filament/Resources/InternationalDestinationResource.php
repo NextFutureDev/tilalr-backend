@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\InternationalDestinationResource\Pages;
+use App\Filament\Resources\Concerns\HasResourcePermissions;
 use App\Models\InternationalDestination;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -12,17 +13,21 @@ use Filament\Tables\Table;
 
 class InternationalDestinationResource extends Resource
 {
+    use HasResourcePermissions;
+
     protected static ?string $model = InternationalDestination::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-map';
+    protected static ?string $navigationIcon = 'heroicon-o-globe-alt';
     
-    protected static ?string $navigationGroup = 'International';
+    protected static ?string $navigationLabel = 'International Destinations';
+    
+    protected static ?string $navigationGroup = 'International Destinations';
 
-    // Only Executive Manager and Super Admin can access
-    public static function canAccess(): bool
+    protected static ?int $navigationSort = 1;
+
+    public static function getPermissionKey(): string
     {
-        $user = auth()->user();
-        return $user && ($user->hasRole('executive_manager') || $user->hasRole('super_admin'));
+        return 'international_destinations';
     }
 
     public static function form(Form $form): Form

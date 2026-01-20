@@ -131,11 +131,7 @@
                         <h3 class="font-bold text-lg mb-2">المنتجات</h3>
                         <p class="text-gray-600 text-sm">عرض وإدارة المنتجات</p>
                     </a>
-                    <a href="http://localhost:8000/api/team-members?lang=ar" target="_blank" 
-                       class="block p-4 border border-gray-300 rounded-lg hover:bg-gray-50">
-                        <h3 class="font-bold text-lg mb-2">فريق العمل</h3>
-                        <p class="text-gray-600 text-sm">عرض وإدارة فريق العمل</p>
-                    </a>
+
                 </div>
             </div>
         </div>

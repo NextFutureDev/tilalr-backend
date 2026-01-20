@@ -24,6 +24,15 @@ class Booking extends Model
         'date' => 'date',
     ];
 
+    /**
+     * Get the booking reference number (ID + 1000 offset)
+     * Example: ID 1 becomes reference 1001
+     */
+    public function getBookingNumberAttribute()
+    {
+        return $this->id + 1000;
+    }
+
     public function payments()
     {
         return $this->hasMany(Payment::class);

@@ -14,7 +14,9 @@ class Kernel extends HttpKernel
      * @var array<int, class-string|string>
      */
     protected $middleware = [
-        // \App\Http\Middleware\TrustHosts::class,
+        // Add CORS middleware at the beginning
+        \App\Http\Middleware\Cors::class,
+        
         \App\Http\Middleware\TrustProxies::class,
         \Illuminate\Http\Middleware\HandleCors::class,
         \App\Http\Middleware\PreventRequestsDuringMaintenance::class,
@@ -44,7 +46,7 @@ class Kernel extends HttpKernel
         ],
 
         'api' => [
-            // \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
@@ -72,5 +74,6 @@ class Kernel extends HttpKernel
         'admin' => \App\Http\Middleware\AdminAccessMiddleware::class,
         'check.permission' => \App\Http\Middleware\CheckPermission::class,
         'check.role' => \App\Http\Middleware\CheckRole::class,
+        'cors' => \App\Http\Middleware\Cors::class, // Add this line
     ];
 }

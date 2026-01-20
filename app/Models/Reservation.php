@@ -10,6 +10,7 @@ class Reservation extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
         'name',
         'email',
         'phone',
@@ -40,6 +41,32 @@ class Reservation extends Model
     public function convertedBooking()
     {
         return $this->belongsTo(Booking::class, 'converted_booking_id');
+    }
+
+    /**
+     * The user who owns this reservation (if linked)
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /**
+     * Get a display-friendly string for the details JSON
+     */
+    public function getDetailsDisplayAttribute()
+    {
+        $details = $this->details;
+
+        if (is_null($details)) {
+            return null;
+        }
+
+        if (is_array($details) || $details instanceof \Illuminate\Contracts\Arrayable) {
+            return json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        }
+
+        return (string) $details;
     }
 
     /**

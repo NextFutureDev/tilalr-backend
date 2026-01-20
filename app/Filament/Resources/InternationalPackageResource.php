@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\InternationalPackageResource\Pages;
+use App\Filament\Resources\Concerns\HasResourcePermissions;
 use App\Models\InternationalPackage;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -12,17 +13,19 @@ use Filament\Tables\Table;
 
 class InternationalPackageResource extends Resource
 {
+    use HasResourcePermissions;
+
     protected static ?string $model = InternationalPackage::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-gift';
     
-    protected static ?string $navigationGroup = 'International';
+    protected static ?string $navigationGroup = 'International Destinations';
 
-    // Only Executive Manager and Super Admin can access
-    public static function canAccess(): bool
+    protected static ?int $navigationSort = 4;
+
+    public static function getPermissionKey(): string
     {
-        $user = auth()->user();
-        return $user && ($user->hasRole('executive_manager') || $user->hasRole('super_admin'));
+        return 'international_packages';
     }
 
     public static function form(Form $form): Form

@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\UserResource\Pages;
 use App\Filament\Resources\UserResource\RelationManagers;
 use App\Models\User;
+use App\Models\Role;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -50,13 +51,19 @@ class UserResource extends Resource
                             ->maxLength(255)
                             ->unique(ignoreRecord: true)
                             ->label('Email Address'),
+
+                        Forms\Components\TextInput::make('phone')
+                            ->tel()
+                            ->maxLength(20)
+                            ->label('Phone Number'),
                         
                         Forms\Components\TextInput::make('password')
                             ->password()
                             ->dehydrateStateUsing(fn ($state) => Hash::make($state))
                             ->dehydrated(fn ($state) => !empty($state))
                             ->required(fn (string $context): bool => $context === 'create')
-                            ->label('Password'),
+                            ->label('Password')
+                            ->helperText(fn (string $context): string => $context === 'edit' ? 'Leave blank to keep current password' : ''),
                         
                         Forms\Components\Toggle::make('is_admin')
                             ->label('Admin Access')
@@ -64,6 +71,20 @@ class UserResource extends Resource
                             ->default(false),
                     ])
                     ->columns(2),
+
+                Forms\Components\Section::make('Role Assignment')
+                    ->description('Assign one or more roles to this user. Roles determine what the user can access.')
+                    ->schema([
+                        Forms\Components\CheckboxList::make('roles')
+                            ->relationship('roles', 'display_name')
+                            ->columns(3)
+                            ->searchable()
+                            ->bulkToggleable()
+                            ->descriptions(
+                                Role::pluck('description', 'id')->filter()->toArray()
+                            )
+                            ->helperText('Select the roles for this user'),
+                    ]),
             ]);
     }
 
@@ -80,6 +101,18 @@ class UserResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->label('Email'),
+
+                Tables\Columns\TextColumn::make('roles.display_name')
+                    ->label('Roles')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'Super Admin' => 'danger',
+                        'Executive Manager' => 'warning',
+                        'Consultant' => 'success',
+                        'Content Manager' => 'info',
+                        default => 'gray',
+                    })
+                    ->separator(', '),
                 
                 Tables\Columns\IconColumn::make('is_admin')
                     ->boolean()
@@ -110,6 +143,11 @@ class UserResource extends Resource
                     ])
                     ->default('0')
                     ->placeholder('All'),
+
+                Tables\Filters\SelectFilter::make('roles')
+                    ->relationship('roles', 'display_name')
+                    ->label('Role')
+                    ->preload(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make()

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\ReservationResource\Pages;
+use App\Filament\Resources\Concerns\HasResourcePermissions;
 use App\Models\Reservation;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -14,6 +15,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ReservationResource extends Resource
 {
+    use HasResourcePermissions;
+
     protected static ?string $model = Reservation::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-calendar-days';
@@ -23,13 +26,6 @@ class ReservationResource extends Resource
     protected static ?int $navigationSort = 1;
 
     protected static ?string $recordTitleAttribute = 'name';
-
-    // Executive Manager, Consultant, and Super Admin can access
-    public static function canAccess(): bool
-    {
-        $user = auth()->user();
-        return $user && ($user->hasRole('executive_manager') || $user->hasRole('consultant') || $user->hasRole('super_admin'));
-    }
 
     public static function getNavigationBadge(): ?string
     {
@@ -64,6 +60,10 @@ class ReservationResource extends Resource
                     ->schema([
                         Forms\Components\Select::make('trip_type')
                             ->options([
+                                'activity' => 'Activity',
+                                'hotel' => 'Hotel',
+                                'flight' => 'Flight',
+                                'package' => 'Package',
                                 'school' => 'School Trip',
                                 'corporate' => 'Corporate Trip',
                                 'family' => 'Family Trip',
@@ -146,6 +146,10 @@ class ReservationResource extends Resource
                 Tables\Columns\TextColumn::make('trip_type')
                     ->badge()
                     ->formatStateUsing(fn (string $state): string => match($state) {
+                        'activity' => 'Activity',
+                        'hotel' => 'Hotel',
+                        'flight' => 'Flight',
+                        'package' => 'Package',
                         'school' => 'School',
                         'corporate' => 'Corporate',
                         'family' => 'Family',
@@ -153,6 +157,10 @@ class ReservationResource extends Resource
                         default => ucfirst($state),
                     })
                     ->color(fn (string $state): string => match($state) {
+                        'activity' => 'success',
+                        'hotel' => 'info',
+                        'flight' => 'warning',
+                        'package' => 'primary',
                         'school' => 'info',
                         'corporate' => 'warning',
                         'family' => 'success',
@@ -202,6 +210,10 @@ class ReservationResource extends Resource
                     ]),
                 Tables\Filters\SelectFilter::make('trip_type')
                     ->options([
+                        'activity' => 'Activity',
+                        'hotel' => 'Hotel',
+                        'flight' => 'Flight',
+                        'package' => 'Package',
                         'school' => 'School Trip',
                         'corporate' => 'Corporate Trip',
                         'family' => 'Family Trip',

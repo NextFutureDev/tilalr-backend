@@ -1,0 +1,48 @@
+INMOTION HOSTING DEPLOYMENT INSTRUCTIONS
+========================================
+
+1. UPLOAD FILES:
+   - Upload all files from this directory to your InMotion hosting public_html folder
+   - You can use cPanel File Manager, FTP, or SSH
+
+2. SET ENVIRONMENT:
+   - Rename .env.production to .env
+   - Update .env with your actual production values:
+     * APP_URL=https://yourdomain.com
+     * Database credentials
+     * Email settings
+     * WhatsApp phone number
+
+3. INSTALL DEPENDENCIES:
+   - Via SSH: composer install --optimize-autoloader --no-dev
+   - Or via cPanel Terminal
+
+4. SET PERMISSIONS:
+   - chmod -R 755 storage/
+   - chmod -R 755 bootstrap/cache/
+   - chmod -R 644 public/
+
+5. CREATE STORAGE LINK:
+   - php artisan storage:link
+
+6. RUN MIGRATIONS:
+   - php artisan migrate --force
+
+7. CREATE ADMIN USER:
+   - php artisan user:create-admin
+
+8. CLEAR AND CACHE:
+   - php artisan config:clear
+   - php artisan route:clear
+   - php artisan view:clear
+   - php artisan config:cache
+   - php artisan route:cache
+   - php artisan view:cache
+
+9. TEST YOUR SITE:
+   - Check homepage loads
+   - Test language switching
+   - Verify contact form
+   - Access admin panel
+
+For detailed instructions, see INMOTION_DEPLOYMENT.md

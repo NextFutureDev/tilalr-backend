@@ -20,13 +20,15 @@ class DatabaseSeeder extends Seeder
             AdminSeeder::class,
             // RBAC system - roles and permissions
             \Database\Seeders\RolePermissionSeeder::class,
+            \Database\Seeders\CreateCustomPaymentOfferPermissionsSeeder::class,
             \Database\Seeders\TestUsersSeeder::class,
             // Seed offers and international demo data
             \Database\Seeders\OfferSeeder::class,
             \Database\Seeders\InternationalDataSeeder::class,
             \Database\Seeders\WinterEventsSeeder::class,
-            // Island destinations - single seeder handles both local & international
+            // Island destinations
             \Database\Seeders\IslandDestinationSeeder::class,
+            \Database\Seeders\IslandDestinationsLocalSeeder::class,
         ]);
     }
 }

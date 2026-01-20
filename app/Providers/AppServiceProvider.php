@@ -4,7 +4,6 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 
-
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -46,8 +45,9 @@ class AppServiceProvider extends ServiceProvider
         
         // Increase max execution time for local environment to help debug long-running admin views
         if (app()->environment('local')) {
-            @ini_set('max_execution_time', '60');
-            @set_time_limit(60);
+            // Allow unlimited execution time for long-running local processes (0 == unlimited)
+            @ini_set('max_execution_time', '0');
+            @set_time_limit(0);
         }
 
         // Handle file upload errors gracefully

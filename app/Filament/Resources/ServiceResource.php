@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\ServiceResource\Pages;
 use App\Filament\Resources\ServiceResource\RelationManagers;
+use App\Filament\Resources\Concerns\HasResourcePermissions;
 use App\Models\Service;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -23,18 +24,13 @@ use Filament\Forms\Components\Tabs;
 
 class ServiceResource extends Resource
 {
+    use HasResourcePermissions;
+
     protected static ?string $model = Service::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
     
     protected static ?string $navigationGroup = 'Content';
-
-    // Consultant and Super Admin can access
-    public static function canAccess(): bool
-    {
-        $user = auth()->user();
-        return $user && ($user->hasRole('consultant') || $user->hasRole('super_admin'));
-    }
 
     public static function form(\Filament\Forms\Form $form): \Filament\Forms\Form
     {

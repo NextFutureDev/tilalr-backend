@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\PaymentResource\Pages;
 use App\Filament\Resources\PaymentResource\RelationManagers;
+use App\Filament\Resources\Concerns\HasResourcePermissions;
 use App\Models\Payment;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -15,16 +16,11 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class PaymentResource extends Resource
 {
+    use HasResourcePermissions;
+
     protected static ?string $model = Payment::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-    
-    // Only Super Admin can access payments
-    public static function canAccess(): bool
-    {
-        $user = auth()->user();
-        return $user && $user->hasRole('super_admin');
-    }
 
     public static function form(Form $form): Form
     {

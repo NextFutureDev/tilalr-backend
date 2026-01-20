@@ -16,4 +16,17 @@ class EditIslandDestination extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // Ensure type remains 'local'
+        $data['type'] = 'local';
+        
+        return $data;
+    }
 }

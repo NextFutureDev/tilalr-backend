@@ -52,6 +52,56 @@ class ReservationController extends Controller
      */
     public function store(Request $request)
     {
+        // Manually resolve user from bearer token (since this route is public)
+        $user = null;
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            // Log token fingerprint (masked) for debugging
+            try {
+                \Illuminate\Support\Facades\Log::info('Reservation auth token extracted', ['token_preview' => substr($token,0,8) . '...']);
+            } catch (\Throwable $e) {}
+
+            $personalAccessToken = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
+            if ($personalAccessToken) {
+                try {
+                    \Illuminate\Support\Facades\Log::info('PersonalAccessToken found', ['id' => $personalAccessToken->id, 'tokenable_type' => $personalAccessToken->tokenable_type, 'tokenable_id' => $personalAccessToken->tokenable_id]);
+                } catch (\Throwable $e) {}
+                $user = $personalAccessToken->tokenable;
+            } else {
+                try {
+                    \Illuminate\Support\Facades\Log::info('PersonalAccessToken not found for provided token');
+                } catch (\Throwable $e) {}
+            }
+        }
+
+        // Debug: log incoming auth header and resolved user (if any)
+        try {
+            \Illuminate\Support\Facades\Log::info('Incoming reservation request', [
+                'authorization' => $authHeader,
+                'user_id_resolved' => $user?->id ?? null,
+                'email' => $request->input('email'),
+                'phone' => $request->input('phone'),
+            ]);
+        } catch (\Throwable $e) {
+            // ignore logging issues
+        }
+
+        // If we couldn't resolve user from token, try to match by provided email
+        if (!$user && $request->input('email')) {
+            try {
+                $foundUser = \App\Models\User::where('email', $request->input('email'))->first();
+                if ($foundUser) {
+                    $user = $foundUser;
+                    \Illuminate\Support\Facades\Log::info('Reservation fallback matched user by email', ['user_id' => $user->id, 'email' => $user->email]);
+                } else {
+                    \Illuminate\Support\Facades\Log::info('Reservation fallback: no user found by email', ['email' => $request->input('email')]);
+                }
+            } catch (\Throwable $e) {
+                // ignore lookup errors
+            }
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255',
@@ -59,7 +109,7 @@ class ReservationController extends Controller
             'trip_type' => 'nullable|string|in:school,corporate,family,private',
             'trip_slug' => 'nullable|string|max:255',
             'trip_title' => 'nullable|string|max:255',
-            'preferred_date' => 'nullable|date|after_or_equal:today',
+            'preferred_date' => 'nullable|date|after_or_equal:yesterday',
             'guests' => 'nullable|integer|min:1|max:500',
             'notes' => 'nullable|string|max:2000',
             'details' => 'nullable|array',
@@ -72,9 +122,11 @@ class ReservationController extends Controller
             ], 422);
         }
 
+        // If a user is authenticated, prefer their account info and link the reservation
         $reservation = Reservation::create([
-            'name' => $request->name,
-            'email' => $request->email,
+            'user_id' => $user?->id ?? null,
+            'name' => $user?->name ?? $request->name,
+            'email' => $user?->email ?? $request->email,
             'phone' => $request->phone,
             'trip_type' => $request->trip_type,
             'trip_slug' => $request->trip_slug,
@@ -99,6 +151,13 @@ class ReservationController extends Controller
             Mail::to($reservation->email)->send(new ReservationConfirmation($reservation));
         } catch (\Exception $e) {
             \Log::error('Failed to send user reservation confirmation: ' . $e->getMessage());
+        }
+
+        // Debug log: show reservation created and linked user if any
+        try {
+            \Illuminate\Support\Facades\Log::info('Reservation created', ['reservation_id' => $reservation->id, 'user_id' => $reservation->user_id, 'email' => $reservation->email, 'phone' => $reservation->phone]);
+        } catch (\Throwable $e) {
+            // ignore logging errors
         }
 
         return response()->json([
@@ -167,6 +226,49 @@ class ReservationController extends Controller
                 'created_at' => $reservation->created_at,
                 'admin_contacted' => $reservation->admin_contacted,
             ]
+        ]);
+    }
+
+    /**
+     * Get authenticated user's reservations (by email)
+     */
+    public function myReservations(Request $request)
+    {
+        $user = $request->user();
+        
+        if (!$user || !$user->email) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not authenticated or email not found'
+            ], 401);
+        }
+
+        $reservations = Reservation::where(function($q) use ($user) {
+                // Prefer explicit user ownership when available, but also include any matching email
+                $q->where('user_id', $user->id)
+                  ->orWhere('email', $user->email);
+            })
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($reservation) {
+                return [
+                    'id' => $reservation->id,
+                    'name' => $reservation->name,
+                    'email' => $reservation->email,
+                    'trip_title' => $reservation->trip_title,
+                    'trip_type' => $reservation->trip_type,
+                    'status' => $reservation->status,
+                    'preferred_date' => $reservation->preferred_date,
+                    'guests' => $reservation->guests,
+                    'admin_contacted' => $reservation->admin_contacted,
+                    'converted_booking_id' => $reservation->converted_booking_id,
+                    'created_at' => $reservation->created_at,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'reservations' => $reservations
         ]);
     }
 

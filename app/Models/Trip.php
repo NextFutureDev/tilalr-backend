@@ -9,13 +9,14 @@ class Trip extends Model
     protected $fillable = [
         'title', 'slug', 'description', 'content', 'price', 'duration',
         'image', 'video', 'images', 'highlights', 'group_size', 'type', 'city_id', 'city_name', 'start_date', 'end_date',
-        'order', 'lang', 'is_active'
+        'order', 'lang', 'is_active', 'blocked_dates'
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'images' => 'array',
         'highlights' => 'array',
+        'blocked_dates' => 'array',
         'price' => 'decimal:2',
         'start_date' => 'date',
         'end_date' => 'date',

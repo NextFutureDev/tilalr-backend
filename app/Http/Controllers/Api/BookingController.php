@@ -18,8 +18,19 @@ class BookingController extends Controller
      */
     public function index(Request $request)
     {
+        $userId = $request->user()->id;
+        $userEmail = $request->user()->email;
+
+        // Return bookings belonging to the user, and also include any guest bookings
+        // that were created without a user but have the same email in details -> email
         $bookings = Booking::with(['payments'])
-            ->where('user_id', $request->user()->id)
+            ->where(function($q) use ($userId, $userEmail) {
+                $q->where('user_id', $userId)
+                  ->orWhere(function($q2) use ($userEmail) {
+                      $q2->whereNull('user_id')
+                         ->where('details->email', $userEmail);
+                  });
+            })
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -34,7 +45,7 @@ class BookingController extends Controller
         $validator = Validator::make($request->all(), [
             'trip_id' => 'nullable|exists:trips,id',
             'trip_slug' => 'nullable|string',
-            'date' => 'required|date|after_or_equal:today',
+            'date' => 'required|date|after_or_equal:yesterday',
             'guests' => 'required|integer|min:1',
             'details' => 'nullable|array',
             'amount' => 'required|numeric|min:0',
@@ -94,50 +105,117 @@ class BookingController extends Controller
 
     /**
      * Guest booking (no authentication required)
+     * Creates a RESERVATION (unpaid) instead of a direct booking
      */
     public function guestStore(Request $request)
     {
+        \Log::info("🔴 Guest booking request received", [
+            'payload' => $request->all(),
+            'headers' => $request->headers->all(),
+        ]);
+
+        // Manually resolve user from bearer token (since this route is public)
+        $user = null;
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            try {
+                \Log::info('Guest booking auth token extracted', ['token_preview' => substr($token,0,8) . '...']);
+                $personalAccessToken = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
+                if ($personalAccessToken) {
+                    $user = $personalAccessToken->tokenable;
+                    \Log::info('Guest booking user resolved from token', ['user_id' => $user?->id, 'email' => $user?->email]);
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('Failed to resolve user from token', ['error' => $e->getMessage()]);
+            }
+        }
+
+        // If we couldn't resolve user from token, try to match by provided email
+        if (!$user && $request->input('email')) {
+            try {
+                $foundUser = \App\Models\User::where('email', $request->input('email'))->first();
+                if ($foundUser) {
+                    $user = $foundUser;
+                    \Log::info('Guest booking fallback matched user by email', ['user_id' => $user->id, 'email' => $user->email]);
+                }
+            } catch (\Throwable $e) {
+                // ignore lookup errors
+            }
+        }
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255',
             'phone' => 'nullable|string|max:20',
             'trip_slug' => 'nullable|string',
-            'date' => 'required|date|after_or_equal:today',
+            'trip_title' => 'nullable|string',
+            'trip_type' => 'nullable|string|in:activity,hotel,flight,package,school,corporate,family,private',
+            'date' => 'required|date|after_or_equal:yesterday',
             'guests' => 'required|integer|min:1',
             'details' => 'nullable|array',
             'amount' => 'nullable|numeric',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            \Log::error("❌ Validation failed for guest booking", [
+                'errors' => $validator->errors()->toArray(),
+                'payload' => $request->all(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
-        $booking = Booking::create([
-            'user_id' => null, // Guest booking
-            'service_id' => null,
-            'date' => $request->date,
-            'guests' => $request->guests,
-            'details' => array_merge($request->input('details', []), [
-                'trip_slug' => $request->trip_slug,
-                'name' => $request->name,
-                'email' => $request->email,
-                'phone' => $request->phone,
-                'amount' => $request->amount,
-            ]),
-            'status' => 'pending',
-            'payment_status' => 'pending'
-        ]);
-
+        // Create RESERVATION (unpaid), not a direct booking
         try {
-            Mail::to(config('mail.from.address'))->send(new NewBooking($booking));
-        } catch (\Exception $e) {
-            \Log::error('Failed to send booking email: ' . $e->getMessage());
-        }
+            $reservation = \App\Models\Reservation::create([
+                'user_id' => $user?->id ?? null,
+                'name' => $user?->name ?? $request->name,
+                'email' => $user?->email ?? $request->email,
+                'phone' => $request->phone,
+                'trip_slug' => $request->trip_slug,
+                'trip_title' => $request->trip_title,
+                'trip_type' => $request->trip_type ?? 'activity',
+                'preferred_date' => $request->date,
+                'guests' => $request->guests,
+                'details' => array_merge($request->input('details', []), [
+                    'amount' => $request->amount,
+                    'booking_type' => $request->trip_type,
+                ]),
+                'status' => 'pending',
+                'admin_contacted' => false,
+            ]);
 
-        return response()->json([
-            'booking' => $booking,
-            'message' => 'Booking request submitted successfully'
-        ], 201);
+            \Log::info("✅ Reservation created successfully", [
+                'id' => $reservation->id,
+                'user_id' => $reservation->user_id,
+                'email' => $reservation->email,
+                'trip_type' => $reservation->trip_type,
+                'status' => $reservation->status,
+            ]);
+
+            return response()->json([
+                'reservation' => [
+                    'id' => $reservation->id,
+                    'email' => $reservation->email,
+                    'status' => $reservation->status,
+                    'name' => $reservation->name,
+                ],
+                'message' => 'Reservation submitted successfully. Admin will contact you to confirm details.'
+            ], 201);
+        } catch (\Exception $e) {
+            \Log::error("❌ Error creating reservation", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'payload' => $request->all(),
+            ]);
+            return response()->json([
+                'message' => 'Failed to create reservation: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -152,8 +230,13 @@ class BookingController extends Controller
         }
 
         // Ensure user can only see their own bookings
-        if ($request->user() && $booking->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+        if ($request->user()) {
+            $user = $request->user();
+            $ownsBooking = $booking->user_id === $user->id;
+            $emailMatches = isset($booking->details['email']) && $booking->details['email'] === $user->email;
+            if (! $ownsBooking && ! $emailMatches) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
         }
 
         return response()->json(['booking' => $booking]);

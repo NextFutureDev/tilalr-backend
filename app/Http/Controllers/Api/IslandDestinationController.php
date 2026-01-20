@@ -29,10 +29,21 @@ class IslandDestinationController extends Controller
                 // Normalize stored image path to a full URL for the frontend
                 $imagePath = $d->image ? ltrim($d->image, '/') : null;
                 if ($imagePath) {
-                    if (preg_match('/^https?:\/\//', $imagePath) || str_starts_with($imagePath, 'storage/') || str_starts_with($imagePath, '/storage/')) {
-                        // already a storage path or absolute URL
-                        $d->image = preg_match('/^https?:\/\//', $imagePath) ? $imagePath : asset($imagePath);
-                    } else {
+                    // Check if already absolute URL
+                    if (preg_match('/^https?:\/\//', $imagePath)) {
+                        $d->image = $imagePath;
+                    }
+                    // Check if it's already a full storage path
+                    elseif (str_starts_with($imagePath, 'storage/') || str_starts_with($imagePath, '/storage/')) {
+                        $d->image = asset($imagePath);
+                    }
+                    // Check if it's islands/ path - Filament stores as "islands/filename.jpg"
+                    // The actual file is in storage/app/public/islands/ -> symlinked to public/storage/islands/
+                    elseif (str_starts_with($imagePath, 'islands/')) {
+                        $d->image = asset('storage/' . $imagePath);
+                    }
+                    // Otherwise treat as storage path
+                    else {
                         $d->image = asset('storage/' . $imagePath);
                     }
                 } else {
@@ -67,14 +78,44 @@ class IslandDestinationController extends Controller
     public function show($id)
     {
         try {
-            $destination = IslandDestination::findOrFail($id);
+            // Try to find by slug first (if it's not a numeric ID)
+            $destination = null;
+            
+            if (!is_numeric($id)) {
+                // It's likely a slug
+                $destination = IslandDestination::where('slug', $id)->first();
+            } else {
+                // It's an ID
+                $destination = IslandDestination::find($id);
+            }
+            
+            // If not found by slug/id, try the other way
+            if (!$destination && !is_numeric($id)) {
+                $destination = IslandDestination::find($id);
+            }
+            
+            if (!$destination) {
+                throw new \Exception('Not found');
+            }
 
             // Normalize image path to full URL
             $imagePath = $destination->image ? ltrim($destination->image, '/') : null;
             if ($imagePath) {
-                if (preg_match('/^https?:\/\//', $imagePath) || str_starts_with($imagePath, 'storage/') || str_starts_with($imagePath, '/storage/')) {
-                    $destination->image = preg_match('/^https?:\/\//', $imagePath) ? $imagePath : asset($imagePath);
-                } else {
+                // Check if already absolute URL
+                if (preg_match('/^https?:\/\//', $imagePath)) {
+                    $destination->image = $imagePath;
+                }
+                // Check if it's already a full storage path
+                elseif (str_starts_with($imagePath, 'storage/') || str_starts_with($imagePath, '/storage/')) {
+                    $destination->image = asset($imagePath);
+                }
+                // Check if it's islands/ path - Filament stores as "islands/filename.jpg"
+                // The actual file is in storage/app/public/islands/ -> symlinked to public/storage/islands/
+                elseif (str_starts_with($imagePath, 'islands/')) {
+                    $destination->image = asset('storage/' . $imagePath);
+                }
+                // Otherwise treat as storage path
+                else {
                     $destination->image = asset('storage/' . $imagePath);
                 }
             } else {

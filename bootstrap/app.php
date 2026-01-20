@@ -12,9 +12,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Increase session lifetime for admin operations
-        // This helps prevent CSRF token expiry during long form editing sessions
-        $middleware->statefulApi();
+        // Note: Not using statefulApi() for pure token-based authentication
+        // This ensures CSRF is not required for API routes since we're using Bearer tokens
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

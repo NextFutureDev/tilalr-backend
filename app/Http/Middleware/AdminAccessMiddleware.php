@@ -26,6 +26,7 @@ class AdminAccessMiddleware
         
         // Check if user has any of the allowed roles OR is_admin
         $hasAccess = $user->is_admin || 
+                     $user->hasRole('super_admin') ||
                      $user->hasRole('executive_manager') || 
                      $user->hasRole('consultant') || 
                      $user->hasRole('administration');

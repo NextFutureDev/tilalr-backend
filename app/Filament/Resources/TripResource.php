@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\TripResource\Pages;
+use App\Filament\Resources\Concerns\HasResourcePermissions;
 use App\Models\Trip;
 use App\Models\City;
 use Filament\Forms;
@@ -22,18 +23,13 @@ use Filament\Tables\Columns\IconColumn;
 
 class TripResource extends Resource
 {
+    use HasResourcePermissions;
+
     protected static ?string $model = Trip::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-flag';
     
     protected static ?string $navigationGroup = 'Content';
-
-    // Consultant and Super Admin can access
-    public static function canAccess(): bool
-    {
-        $user = auth()->user();
-        return $user && ($user->hasRole('consultant') || $user->hasRole('super_admin'));
-    }
 
     public static function form(Form $form): Form
     {
