@@ -124,6 +124,56 @@ class Reservation extends Model
     }
 
     /**
+     * Get guest count from booking details or fall back to main guests column
+     */
+    public function getBookingGuestCountAttribute(): ?int
+    {
+        if (isset($this->details['numberOfGuests'])) {
+            return intval($this->details['numberOfGuests']);
+        }
+        return $this->guests ?? null;
+    }
+
+    /**
+     * Get room information summary from booking details
+     */
+    public function getRoomInfoAttribute(): ?array
+    {
+        if (isset($this->details['roomCount']) || isset($this->details['roomsNearEachOther'])) {
+            return [
+                'roomCount' => intval($this->details['roomCount'] ?? 1),
+                'roomsNearEachOther' => boolval($this->details['roomsNearEachOther'] ?? false),
+                'roomsNearEachOtherCount' => intval($this->details['roomsNearEachOtherCount'] ?? 1),
+                'roomType' => $this->details['roomType'] ?? null,
+            ];
+        }
+        return null;
+    }
+
+    /**
+     * Get a human-readable room summary
+     */
+    public function getRoomSummaryAttribute(): ?string
+    {
+        $info = $this->room_info;
+        if (!$info) {
+            return null;
+        }
+
+        $summary = $info['roomCount'] . ' ' . ($info['roomCount'] > 1 ? 'rooms' : 'room');
+
+        if ($info['roomsNearEachOther']) {
+            $summary .= ' (adjacent: ' . $info['roomsNearEachOtherCount'] . ')';
+        }
+
+        if ($info['roomType']) {
+            $summary .= ' - ' . $info['roomType'];
+        }
+
+        return $summary;
+    }
+
+    /**
      * Scope for pending reservations
      */
     public function scopePending($query)

@@ -171,6 +171,23 @@ class BookingController extends Controller
 
         // Create RESERVATION (unpaid), not a direct booking
         try {
+            // Preserve all details from the frontend request
+            // This includes: numberOfGuests, roomCount, roomsNearEachOther, roomsNearEachOtherCount, etc.
+            $detailsPayload = $request->input('details', []);
+            
+            // If details is not an array, initialize it
+            if (!is_array($detailsPayload)) {
+                $detailsPayload = [];
+            }
+
+            // Add booking metadata
+            $detailsPayload['amount'] = $request->amount;
+            $detailsPayload['booking_type'] = $request->trip_type;
+            
+            // Ensure we preserve all the booking details from frontend
+            // (numberOfGuests, roomCount, roomsNearEachOther, roomsNearEachOtherCount, etc.)
+            // These are already in the details array from the frontend
+            
             $reservation = \App\Models\Reservation::create([
                 'user_id' => $user?->id ?? null,
                 'name' => $user?->name ?? $request->name,
@@ -181,10 +198,7 @@ class BookingController extends Controller
                 'trip_type' => $request->trip_type ?? 'activity',
                 'preferred_date' => $request->date,
                 'guests' => $request->guests,
-                'details' => array_merge($request->input('details', []), [
-                    'amount' => $request->amount,
-                    'booking_type' => $request->trip_type,
-                ]),
+                'details' => $detailsPayload, // All frontend details are preserved here
                 'status' => 'pending',
                 'admin_contacted' => false,
             ]);
@@ -195,6 +209,14 @@ class BookingController extends Controller
                 'email' => $reservation->email,
                 'trip_type' => $reservation->trip_type,
                 'status' => $reservation->status,
+                'guests' => $reservation->guests,
+                'details_keys' => array_keys($detailsPayload),
+                'details_sample' => [
+                    'numberOfGuests' => $detailsPayload['numberOfGuests'] ?? null,
+                    'roomCount' => $detailsPayload['roomCount'] ?? null,
+                    'roomsNearEachOther' => $detailsPayload['roomsNearEachOther'] ?? null,
+                    'roomsNearEachOtherCount' => $detailsPayload['roomsNearEachOtherCount'] ?? null,
+                ],
             ]);
 
             return response()->json([

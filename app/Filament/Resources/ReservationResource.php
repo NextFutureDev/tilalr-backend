@@ -83,6 +83,32 @@ class ReservationResource extends Resource
                     ])
                     ->columns(2),
 
+                Forms\Components\Section::make('Hotel Booking Details')
+                    ->collapsible()
+                    ->collapsed()
+                    ->schema([
+                        Forms\Components\TextInput::make('details.roomCount')
+                            ->label('Number of Rooms')
+                            ->numeric(),
+                        Forms\Components\Toggle::make('details.roomsNearEachOther')
+                            ->label('Rooms Near Each Other')
+                            ->helperText('Guest requested adjacent/nearby rooms'),
+                        Forms\Components\TextInput::make('details.roomsNearEachOtherCount')
+                            ->label('Adjacent Rooms Count')
+                            ->numeric()
+                            ->helperText('How many rooms should be adjacent'),
+                        Forms\Components\TextInput::make('details.roomType')
+                            ->label('Room Type')
+                            ->maxLength(100),
+                        Forms\Components\TextInput::make('details.checkInDate')
+                            ->label('Check-in Date')
+                            ->maxLength(100),
+                        Forms\Components\TextInput::make('details.checkOutDate')
+                            ->label('Check-out Date')
+                            ->maxLength(100),
+                    ])
+                    ->columns(2),
+
                 Forms\Components\Section::make('Notes')
                     ->schema([
                         Forms\Components\Textarea::make('notes')
@@ -90,7 +116,7 @@ class ReservationResource extends Resource
                             ->rows(3)
                             ->columnSpanFull(),
                         Forms\Components\KeyValue::make('details')
-                            ->label('Additional Details')
+                            ->label('All Additional Details (JSON)')
                             ->columnSpanFull(),
                     ]),
 
@@ -170,6 +196,19 @@ class ReservationResource extends Resource
                 Tables\Columns\TextColumn::make('trip_title')
                     ->limit(30)
                     ->toggleable(),
+                Tables\Columns\TextColumn::make('details.numberOfGuests')
+                    ->label('Booking Guests')
+                    ->toggleable()
+                    ->formatStateUsing(fn ($state) => $state ?? 'N/A'),
+                Tables\Columns\TextColumn::make('details.roomCount')
+                    ->label('Rooms')
+                    ->toggleable()
+                    ->formatStateUsing(fn ($state) => $state ? $state . (intval($state) > 1 ? ' rooms' : ' room') : 'N/A'),
+                Tables\Columns\TextColumn::make('details.roomsNearEachOther')
+                    ->label('Near Each Other')
+                    ->toggleable()
+                    ->formatStateUsing(fn ($state) => $state === true ? '✓ Yes' : ($state === false ? 'No' : 'N/A'))
+                    ->color(fn ($state) => $state === true ? 'success' : ($state === false ? 'gray' : 'gray')),
                 Tables\Columns\TextColumn::make('preferred_date')
                     ->date()
                     ->sortable(),
