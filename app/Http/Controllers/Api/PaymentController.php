@@ -142,15 +142,90 @@ class PaymentController extends Controller
         // Convert SAR to halalas (1 SAR = 100 halalas)
         $amountInHalalas = $amountInSar * 100;
 
-        // Moyasar configuration with Apple Pay disabled
+        // Validate Moyasar publishable key presence and provide helpful error message
+        $publishableKey = env('MOYASAR_PUBLISHABLE_KEY');
+        if (!$publishableKey) {
+            Log::error('Moyasar publishable key missing in environment');
+            return response()->json([
+                'success' => false,
+                'message' => 'Moyasar publishable API key is not configured. Please set MOYASAR_PUBLISHABLE_KEY in .env.'
+            ], 500);
+        }
+
+        // Validate test-mode / key prefix consistency to catch common misconfigurations
+        $isTestMode = filter_var(env('MOYASAR_TEST_MODE', false), FILTER_VALIDATE_BOOLEAN);
+        if ($isTestMode && str_starts_with($publishableKey, 'pk_live_')) {
+            Log::warning('Moyasar publishable key looks live while MOYASAR_TEST_MODE is true');
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid Publishable API Key for test mode. You are running Moyasar in test mode but the publishable key appears to be a live key. Set MOYASAR_TEST_MODE=false for live keys or use a test publishable key (pk_test_...).'
+            ], 400);
+        }
+        if (!$isTestMode && str_starts_with($publishableKey, 'pk_test_')) {
+            Log::warning('Moyasar publishable key looks test while MOYASAR_TEST_MODE is false');
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid Publishable API Key for live mode. You are running Moyasar in live mode but the publishable key appears to be a test key. Set MOYASAR_TEST_MODE=true for test keys or use a live publishable key (pk_live_...).'
+            ], 400);
+        }
+
+        // Verify secret key works with Moyasar to give a clear error when secret is invalid
+        $secretKey = env('MOYASAR_SECRET_KEY');
+        if (!$secretKey) {
+            Log::error('Moyasar secret key missing in environment');
+            return response()->json([
+                'success' => false,
+                'message' => 'Moyasar secret API key is not configured. Please set MOYASAR_SECRET_KEY in .env.'
+            ], 500);
+        }
+
+        try {
+            $client = new \GuzzleHttp\Client();
+            $res = $client->get('https://api.moyasar.com/v1/payments?limit=1', [
+                'auth' => [$secretKey, ''],
+                'headers' => ['Accept' => 'application/json'],
+                'timeout' => 5,
+            ]);
+
+            if ($res->getStatusCode() !== 200) {
+                Log::warning('Unexpected Moyasar response when validating secret', ['status' => $res->getStatusCode()]);
+            }
+        } catch (\GuzzleHttp\Exception\ClientException $e) {
+            $code = $e->getResponse() ? $e->getResponse()->getStatusCode() : 0;
+            Log::error('Moyasar secret key validation failed', ['code' => $code, 'error' => $e->getMessage()]);
+            if ($code === 401) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid Moyasar secret key. Please verify MOYASAR_SECRET_KEY in .env.'
+                ], 500);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Moyasar secret key validation could not be completed', ['error' => $e->getMessage()]);
+        }
+
+        // Determine allowed methods. By default do not expose Apple Pay unless explicitly enabled with the required settings.
+        $methods = ['creditcard', 'stcpay'];
+        if (env('ENABLE_APPLE_PAY', false)) {
+            // Require Apple Pay specific settings to be present
+            $appleLabel = env('APPLE_PAY_LABEL');
+            $appleValidationUrl = env('APPLE_PAY_MERCHANT_VALIDATION_URL');
+            $appleCountry = env('APPLE_PAY_COUNTRY');
+
+            if ($appleLabel && $appleValidationUrl && $appleCountry) {
+                $methods[] = 'applepay';
+            } else {
+                Log::warning('Apple Pay enabled but missing configuration (label/validation_url/country)');
+            }
+        }
+
+        // Moyasar configuration
         $moyasarConfig = [
-            'publishable_api_key' => env('MOYASAR_PUBLISHABLE_KEY', 'pk_live_JjGYt4f9iWDGpc9uCE9FCMBvZ9u5FBa5SsQvEFAY'),
+            'publishable_api_key' => $publishableKey,
             'amount' => $amountInHalalas, // Amount in halalas
             'currency' => 'SAR', // Saudi Riyals
             'description' => 'دفع حجز - ' . ($booking->trip_slug ?? 'حجز'),
             'callback_url' => config('app.frontend_url') . '/payment-callback',
-            // Explicitly specify payment methods to disable Apple Pay
-            'methods' => ['creditcard', 'stcpay'],
+            'methods' => $methods,
             'metadata' => [
                 'booking_id' => $booking->id,
                 'user_id' => $booking->user_id ?? null,
@@ -160,6 +235,15 @@ class PaymentController extends Controller
             'language' => 'ar',
             'on_close' => config('app.frontend_url') . '/booking/' . $booking->id,
         ];
+
+        // Include Apple Pay settings for client only if properly configured (used by Moyasar MPF when applepay present)
+        if (in_array('applepay', $methods)) {
+            $moyasarConfig['apple_pay'] = [
+                'label' => env('APPLE_PAY_LABEL'),
+                'validation_url' => env('APPLE_PAY_MERCHANT_VALIDATION_URL'),
+                'country' => env('APPLE_PAY_COUNTRY'),
+            ];
+        }
 
         Log::info('Payment initiated', [
             'booking_id' => $booking->id,

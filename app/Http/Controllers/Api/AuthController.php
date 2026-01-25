@@ -128,6 +128,15 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         try {
+            // Set locale from Accept-Language header (supports 'ar' and 'en')
+            $acceptLang = $request->header('Accept-Language');
+            if ($acceptLang) {
+                $lang = strtolower(substr($acceptLang, 0, 2));
+                if (in_array($lang, ['ar', 'en'])) {
+                    app()->setLocale($lang);
+                }
+            }
+
             // Allow login by phone (preferred) or email as a fallback
             $request->validate([
                 'phone' => 'nullable|string',
@@ -147,9 +156,9 @@ class AuthController extends Controller
             } else {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Phone or email is required for login.',
+                    'message' => __('auth.phone_or_email_required'),
                     'errors' => [
-                        'phone' => ['Phone or email is required for login.']
+                        'phone' => [ __('auth.phone_or_email_required') ]
                     ]
                 ], 422);
             }
@@ -158,7 +167,7 @@ class AuthController extends Controller
             if (!$user || !Hash::check($request->password, $user->password)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid credentials. Please check your phone/email and password.',
+                    'message' => __('auth.invalid_credentials'),
                 ], 401);
             }
 
@@ -183,7 +192,7 @@ class AuthController extends Controller
             if (!$user->phone) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Phone number required for OTP verification. Please contact support.',
+                    'message' => __('auth.phone_required_for_otp'),
                 ], 400);
             }
 
@@ -198,7 +207,7 @@ class AuthController extends Controller
                 ]);
                 return response()->json([
                     'success' => false,
-                    'message' => 'Failed to send OTP. Please try again later.',
+                    'message' => __('auth.failed_send_otp'),
                 ], 500);
             }
 
@@ -211,7 +220,7 @@ class AuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'OTP sent to phone. Verify to complete login.',
+                'message' => __('auth.otp_sent'),
                 'requires_otp' => true,
                 'phone' => $user->phone,
                 // Include fixed OTP in dev mode for convenience
