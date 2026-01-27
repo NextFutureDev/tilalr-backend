@@ -57,4 +57,7 @@ class Permission extends Model
 
         return $permissions;
     }
+
+
+
 }

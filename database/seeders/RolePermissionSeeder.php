@@ -17,53 +17,53 @@ class RolePermissionSeeder extends Seeder
             ['name' => 'create_international_destinations', 'display_name' => 'Create International Destinations'],
             ['name' => 'edit_international_destinations', 'display_name' => 'Edit International Destinations'],
             ['name' => 'delete_international_destinations', 'display_name' => 'Delete International Destinations'],
-            
+
             // International Flights
             ['name' => 'view_international_flights', 'display_name' => 'View International Flights'],
             ['name' => 'create_international_flights', 'display_name' => 'Create International Flights'],
             ['name' => 'edit_international_flights', 'display_name' => 'Edit International Flights'],
             ['name' => 'delete_international_flights', 'display_name' => 'Delete International Flights'],
-            
+
             // International Hotels
             ['name' => 'view_international_hotels', 'display_name' => 'View International Hotels'],
             ['name' => 'create_international_hotels', 'display_name' => 'Create International Hotels'],
             ['name' => 'edit_international_hotels', 'display_name' => 'Edit International Hotels'],
             ['name' => 'delete_international_hotels', 'display_name' => 'Delete International Hotels'],
-            
+
             // International Packages
             ['name' => 'view_international_packages', 'display_name' => 'View International Packages'],
             ['name' => 'create_international_packages', 'display_name' => 'Create International Packages'],
             ['name' => 'edit_international_packages', 'display_name' => 'Edit International Packages'],
             ['name' => 'delete_international_packages', 'display_name' => 'Delete International Packages'],
-            
+
             // Island Destinations
             ['name' => 'view_island_destinations', 'display_name' => 'View Island Destinations'],
             ['name' => 'create_island_destinations', 'display_name' => 'Create Island Destinations'],
             ['name' => 'edit_island_destinations', 'display_name' => 'Edit Island Destinations'],
             ['name' => 'delete_island_destinations', 'display_name' => 'Delete Island Destinations'],
-            
+
             // Offers
             ['name' => 'view_offers', 'display_name' => 'View Offers'],
             ['name' => 'create_offers', 'display_name' => 'Create Offers'],
             ['name' => 'edit_offers', 'display_name' => 'Edit Offers'],
             ['name' => 'delete_offers', 'display_name' => 'Delete Offers'],
-            
+
             // Services
             ['name' => 'view_services', 'display_name' => 'View Services'],
             ['name' => 'create_services', 'display_name' => 'Create Services'],
             ['name' => 'edit_services', 'display_name' => 'Edit Services'],
             ['name' => 'delete_services', 'display_name' => 'Delete Services'],
-            
+
             // Trips
             ['name' => 'view_trips', 'display_name' => 'View Trips'],
             ['name' => 'create_trips', 'display_name' => 'Create Trips'],
             ['name' => 'edit_trips', 'display_name' => 'Edit Trips'],
             ['name' => 'delete_trips', 'display_name' => 'Delete Trips'],
-            
+
             // Contacts
             ['name' => 'view_contacts', 'display_name' => 'View Contacts'],
             ['name' => 'manage_contacts', 'display_name' => 'Manage Contacts'],
-            
+
             // Reservations & Bookings
             ['name' => 'view_reservations', 'display_name' => 'View Reservations'],
             ['name' => 'manage_reservations', 'display_name' => 'Manage Reservations'],
@@ -86,6 +86,7 @@ class RolePermissionSeeder extends Seeder
                 'title_en' => 'Executive Manager',
                 'title_ar' => 'مدير تنفيذي',
                 'display_name' => 'Executive Manager',
+                'allowed_modules' => ["all"],
                 'description' => 'Full access to all international and island destinations, flights, hotels, packages, contacts, reservations and bookings',
                 'permissions' => [
                     'view_international_destinations', 'create_international_destinations', 'edit_international_destinations', 'delete_international_destinations',

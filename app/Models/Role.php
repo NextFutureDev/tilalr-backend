@@ -1,41 +1,28 @@
 <?php
 
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Role extends Model
 {
     protected $fillable = [
-        'name', // 'executive_manager', 'consultant', 'administration'
-        'display_name', // 'Executive Manager'
+        'name',
+        'title_en',
+        'title_ar',
+        'display_name',
+        'allowed_modules',
         'description',
-        'title_en', // legacy
-        'title_ar', // legacy
-        'description_en', // legacy
-        'description_ar', // legacy
-        'is_active',
-        'sort_order',
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
-        'sort_order' => 'integer',
+        'allowed_modules' => 'array',
     ];
 
     /**
-     * Relationship: Role has many users
-     */
-    public function users(): BelongsToMany
-    {
-        return $this->belongsToMany(User::class, 'role_user')
-            ->withTimestamps();
-    }
-
-    /**
-     * Relationship: Role has many permissions
+     * Relationship: Role belongs to many permissions
      */
     public function permissions(): BelongsToMany
     {
@@ -44,55 +31,18 @@ class Role extends Model
     }
 
     /**
-     * Check if role has permission
+     * Check if role has a specific permission
      */
-    public function hasPermission($permission): bool
+    public function hasPermission(string $permission): bool
     {
-        if (is_string($permission)) {
-            $permission = Permission::where('name', $permission)->first();
-        }
-        return $this->permissions()->where('permissions.id', $permission->id)->exists();
+        return $this->permissions()->where('name', $permission)->exists();
     }
 
     /**
-     * Get the title based on current locale (legacy)
+     * Check if role has any of the given permissions
      */
-    public function getTitleAttribute()
+    public function hasAnyPermission(array $permissions): bool
     {
-        $locale = app()->getLocale();
-        return $this->{"title_{$locale}"};
-    }
-
-    /**
-     * Get the description based on current locale
-     */
-    public function getDescriptionAttribute()
-    {
-        $locale = app()->getLocale();
-        return $this->{"description_{$locale}"};
-    }
-
-    /**
-     * Get team members for this role
-     */
-    public function teamMembers(): HasMany
-    {
-        return $this->hasMany(TeamMember::class);
-    }
-
-    /**
-     * Scope to get active roles
-     */
-    public function scopeActive($query)
-    {
-        return $query->where('is_active', true);
-    }
-
-    /**
-     * Scope to order by sort order
-     */
-    public function scopeOrdered($query)
-    {
-        return $query->orderBy('sort_order')->orderBy('title_en');
+        return $this->permissions()->whereIn('name', $permissions)->exists();
     }
 }

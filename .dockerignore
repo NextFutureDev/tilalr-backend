@@ -1,0 +1,73 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea
+.vscode
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Vendor (will be installed in container)
+/vendor
+
+# Node modules
+/node_modules
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.backup
+
+# Testing
+/tests
+phpunit.xml
+.phpunit.result.cache
+
+# Build files
+*.log
+npm-debug.log*
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Temporary files
+/storage/app/public/*
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+!/storage/app/.gitignore
+!/storage/framework/.gitignore
+!/storage/framework/cache/.gitignore
+!/storage/framework/sessions/.gitignore
+!/storage/framework/views/.gitignore
+!/storage/logs/.gitignore
+
+# PHP files for debugging/testing
+*.php.bak
+check_*.php
+create_*.php
+debug_*.php
+fix_*.php
+test_*.php
+cleanup_*.php
+
+# SQL files
+*.sql
+
+# Zip files
+*.zip
