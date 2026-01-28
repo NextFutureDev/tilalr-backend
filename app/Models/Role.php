@@ -35,7 +35,11 @@ class Role extends Model
     }
 
     /**
+<<<<<<< Updated upstream
      * Relationship: Role has many permissions
+=======
+     * Relationship: Role belongs to many permissions
+>>>>>>> Stashed changes
      */
     public function permissions(): BelongsToMany
     {
