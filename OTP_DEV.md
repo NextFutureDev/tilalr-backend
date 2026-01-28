@@ -1,1 +1,0 @@
-Development OTP mode is removed. Use `send-otp`/`verify-otp` endpoints to generate and verify real OTPs; SMS messages are logged when no provider is configured.

@@ -53,6 +53,16 @@ services:
       STRIPE_SECRET: ${STRIPE_SECRET}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
       
+      # OTP & SMS Configuration
+      OTP_MODE: ${OTP_MODE:-sms}
+      OTP_FIXED_CODE: ${OTP_FIXED_CODE:-1234}
+      OTP_EXPIRY_MINUTES: ${OTP_EXPIRY_MINUTES:-5}
+      SMS_PROVIDER: ${SMS_PROVIDER:-taqnyat}
+      
+      # Taqnyat SMS Provider
+      TAQNYAT_BEARER_TOKEN: ${TAQNYAT_BEARER_TOKEN}
+      TAQNYAT_SENDER: ${TAQNYAT_SENDER:-Tilalr}
+      
       # Auto migrate
       AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
     ports:
